@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Outfit', system-ui, -apple-system, sans-serif;
+
+  --color-primary: #0f766e; /* teal-700 */
+  --color-primary-hover: #0d9488; /* teal-600 */
+  
+  --color-bg: #f8fafc; /* slate-50 */
+  --color-sidebar-bg: #ffffff; /* white */
+  --color-sidebar-border: #e2e8f0; /* slate-200 */
+  --color-border: #e2e8f0; /* slate-200 */
+  
+  --color-text-primary: #0f172a; /* slate-900 */
+  --color-text-secondary: #475569; /* slate-600 */
+  --color-text-muted: #64748b; /* slate-500 */
+  
+  --color-neutral-surface: #f1f5f9; /* slate-100 */
+  --color-neutral-bg: #f8fafc; /* slate-50 */
+  --color-neutral-bg-disabled: #e2e8f0; /* slate-200 */
+  
+  --color-success: #16a34a; /* green-600 */
+  --color-success-light: #dcfce7; /* green-100 */
+  --color-error: #dc2626; /* red-600 */
+  --color-error-bg: #fee2e2; /* red-100 */
+  --color-warning: #d97706; /* amber-600 */
+  --color-warning-light: #fef3c7; /* amber-100 */
+
+  --color-brand-primary: #0f766e;
+  
+  --color-dt-bg: #ffffff; /* white */
+  --color-dt-border-color: #e2e8f0; /* slate-200 */
+  --color-dt-header-bg: #f8fafc; /* slate-50 */
+  --color-dt-header-text: #475569; /* slate-600 */
+  --color-dt-row-text: #0f172a; /* slate-900 */
+  --color-dt-row-selected-bg: #f1f5f9; /* slate-100 */
+  --color-dt-toolbar-bg: #ffffff; /* white */
+  --color-dt-toolbar-text: #475569; /* slate-600 */
+}
+
