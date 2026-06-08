@@ -710,4 +710,84 @@ SELECT
 FROM MonthData;
 """
 
+def LineStopRecordDaily(ReportDate) -> str:
+    return f"""
+SELECT
+    ls.DT,
+    ls.LineStopTime,
+    ls.TypeOfCall,
+    CASE 
+        WHEN ls.TypeOfCall = 1 THEN 'Process Call'
+        WHEN ls.TypeOfCall = 2 THEN 'Material Call'
+        WHEN ls.TypeOfCall = 3 THEN 'Quality Call'
+        WHEN ls.TypeOfCall = 4 THEN 'Maintenance Call'
+        ELSE 'Other'
+    END AS TypeOfCallText,
+    ls.Reason AS ReasonCode,
+    CASE
+        WHEN ls.TypeOfCall = 1 THEN pc.Reason
+        WHEN ls.TypeOfCall = 2 THEN sc.Reason
+        WHEN ls.TypeOfCall = 3 THEN qc.Reason
+        WHEN ls.TypeOfCall = 4 THEN mc.Reason
+        ELSE NULL
+    END AS ReasonText,
+    ls.StationNo
+FROM [TRIM_PC].[dbo].[LineStopRecord] ls
+LEFT JOIN [TRIM_PC].[dbo].[Process_Call] pc ON ls.Reason = pc.Sr_No AND ls.TypeOfCall = 1
+LEFT JOIN [TRIM_PC].[dbo].[Store_Call] sc ON ls.Reason = sc.Sr_No AND ls.TypeOfCall = 2
+LEFT JOIN [TRIM_PC].[dbo].[Quality_Call] qc ON ls.Reason = qc.Sr_No AND ls.TypeOfCall = 3
+LEFT JOIN [TRIM_PC].[dbo].[Maintenance_Call] mc ON ls.Reason = mc.Sr_No AND ls.TypeOfCall = 4
+WHERE CAST(ls.DT AS DATE) = '{ReportDate}'
+ORDER BY ls.DT ASC;
+"""
 
+def LineStopRecordMonthly(ReportDate) -> str:
+    return f"""
+SELECT
+    ls.DT,
+    ls.LineStopTime,
+    ls.TypeOfCall,
+    CASE 
+        WHEN ls.TypeOfCall = 1 THEN 'Process Call'
+        WHEN ls.TypeOfCall = 2 THEN 'Material Call'
+        WHEN ls.TypeOfCall = 3 THEN 'Quality Call'
+        WHEN ls.TypeOfCall = 4 THEN 'Maintenance Call'
+        ELSE 'Other'
+    END AS TypeOfCallText,
+    ls.Reason AS ReasonCode,
+    CASE
+        WHEN ls.TypeOfCall = 1 THEN pc.Reason
+        WHEN ls.TypeOfCall = 2 THEN sc.Reason
+        WHEN ls.TypeOfCall = 3 THEN qc.Reason
+        WHEN ls.TypeOfCall = 4 THEN mc.Reason
+        ELSE NULL
+    END AS ReasonText,
+    ls.StationNo
+FROM [TRIM_PC].[dbo].[LineStopRecord] ls
+LEFT JOIN [TRIM_PC].[dbo].[Process_Call] pc ON ls.Reason = pc.Sr_No AND ls.TypeOfCall = 1
+LEFT JOIN [TRIM_PC].[dbo].[Store_Call] sc ON ls.Reason = sc.Sr_No AND ls.TypeOfCall = 2
+LEFT JOIN [TRIM_PC].[dbo].[Quality_Call] qc ON ls.Reason = qc.Sr_No AND ls.TypeOfCall = 3
+LEFT JOIN [TRIM_PC].[dbo].[Maintenance_Call] mc ON ls.Reason = mc.Sr_No AND ls.TypeOfCall = 4
+WHERE YEAR(ls.DT) = YEAR('{ReportDate}') AND MONTH(ls.DT) = MONTH('{ReportDate}')
+ORDER BY ls.DT ASC;
+"""
+
+def ProductionLossDaily(ReportDate) -> str:
+    return f"""
+SELECT
+    Shift,
+    ShiftStart,
+    ShiftEnd,
+    ProdCount,
+    ProdLoss,
+    ShiftTime,
+    BreakTime,
+    LinePause,
+    DownTime,
+    ShiftWorkingTime,
+    OEE,
+    DT
+FROM [TRIM_PC].[dbo].[Production_Loss]
+WHERE CAST(DT AS DATE) = '{ReportDate}'
+ORDER BY Shift ASC;
+"""

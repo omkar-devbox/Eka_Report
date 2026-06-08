@@ -1,7 +1,6 @@
 import os
 import sys
 import subprocess
-from app.constant.queris import S_BIW
 import calendar
 import datetime
 import openpyxl
@@ -12,7 +11,15 @@ from fastapi.responses import FileResponse
 
 from app.core.database import get_db_connection
 from app.schemas.mgmt_prod_report import MgmtProdReportRequest, OpenFileRequest
-from app.constant.queris import M_TCF, S_TCF
+from app.constant.queris import (
+    S_BIW,
+    M_BIW,
+    M_TCF,
+    S_TCF,
+    LineStopRecordDaily,
+    LineStopRecordMonthly,
+    ProductionLossDaily
+)
 
 router = APIRouter()
 
@@ -68,9 +75,19 @@ def generate_mgmt_production_report(
         cursor.execute(S_BIW(payload.ReportDate, payload.StartDate, payload.LastDate))
         rows2 = cursor.fetchall()
 
-        cursor.execute(M_TCF(payload.ReportDate, payload.StartDate, payload.LastDate))
+        # Fix bug: Micky BIW should use M_BIW instead of M_TCF
+        cursor.execute(M_BIW(payload.ReportDate, payload.StartDate, payload.LastDate))
         rows3 = cursor.fetchall()
 
+        # 4. Run line stop queries (Daily & Monthly) and Production Loss query
+        cursor.execute(LineStopRecordDaily(payload.ReportDate))
+        daily_line_stops = cursor.fetchall()
+
+        cursor.execute(LineStopRecordMonthly(payload.ReportDate))
+        monthly_line_stops = cursor.fetchall()
+
+        cursor.execute(ProductionLossDaily(payload.ReportDate))
+        daily_prod_loss = cursor.fetchall()
         
         cursor.close()
 
@@ -138,7 +155,7 @@ def generate_mgmt_production_report(
                 # Update Daily Plan(Achievement)
                 cell_P11 = ws.cell(row=11, column=16)
                 cell_P11.number_format = '@'
-                cell_P11.value = safe_int(rows[0][1]) - safe_int(rows[0][2])
+                cell_P11.value = safe_int(rows[0][2]) - safe_int(rows[0][1])
 
                 # MTD(Month To Date Actual)
                 cell_Q11 = ws.cell(row=11, column=17)
@@ -153,7 +170,7 @@ def generate_mgmt_production_report(
                 # MTD(Month To Date Achievement)
                 cell_S11 = ws.cell(row=11, column=19)
                 cell_S11.number_format = '@'
-                cell_S11.value = safe_int(rows[0][17]) - safe_int(rows[0][18])
+                cell_S11.value = safe_int(rows[0][18]) - safe_int(rows[0][17])
 
                 # YTD(Year To Date Target)
                 cell_T11 = ws.cell(row=11, column=20)
@@ -203,7 +220,7 @@ def generate_mgmt_production_report(
                 # Monthly (Achievement)
                 cell_G11 = ws.cell(row=11, column=7)
                 cell_G11.number_format = '@'
-                cell_G11.value = safe_int(rows[0][13]) - safe_int(rows[0][14])
+                cell_G11.value = safe_int(rows[0][14]) - safe_int(rows[0][13])
 
 
              #------ Micky Production Report TCF------
@@ -221,7 +238,7 @@ def generate_mgmt_production_report(
                 # Update Daily Plan(Achievement)
                 cell_P12 = ws.cell(row=12, column=16)
                 cell_P12.number_format = '@'
-                cell_P12.value = safe_int(rows1[0][1]) - safe_int(rows1[0][2])
+                cell_P12.value = safe_int(rows1[0][2]) - safe_int(rows1[0][1])
 
                 # MTD(Month To Date Actual)
                 cell_Q12 = ws.cell(row=12, column=17)
@@ -236,7 +253,7 @@ def generate_mgmt_production_report(
                 # MTD(Month To Date Achievement)
                 cell_S12 = ws.cell(row=12, column=19)
                 cell_S12.number_format = '@'
-                cell_S12.value = safe_int(rows1[0][17]) - safe_int(rows1[0][18])
+                cell_S12.value = safe_int(rows1[0][18]) - safe_int(rows1[0][17])
 
                 # YTD(Year To Date Target)
                 cell_T12 = ws.cell(row=12, column=20)
@@ -286,7 +303,7 @@ def generate_mgmt_production_report(
                 # Monthly (Achievement)
                 cell_G12 = ws.cell(row=12, column=7)
                 cell_G12.number_format = '@'
-                cell_G12.value = safe_int(rows1[0][13]) - safe_int(rows1[0][14])
+                cell_G12.value = safe_int(rows1[0][14]) - safe_int(rows1[0][13])
 
 
             #------ Saarthi Production Report BIW------
@@ -389,6 +406,174 @@ def generate_mgmt_production_report(
             
 
         
+
+        # 6.5 Populate Line Stop & Production Loss worksheet
+        if "Line Stop_Prod Loss" in wb.sheetnames:
+            ws_ls = wb["Line Stop_Prod Loss"]
+
+            def get_station_line(stn):
+                if stn is None:
+                    return None
+                try:
+                    stn = int(stn)
+                except ValueError:
+                    return None
+                if 1 <= stn <= 4:
+                    return "I-Puma Sub"
+                elif 5 <= stn <= 13:
+                    return "I-Puma Main"
+                elif 14 <= stn <= 17:
+                    return "BIW Sub"
+                elif 18 <= stn <= 24:
+                    return "BIW Main"
+                elif 25 <= stn <= 30:
+                    return "D+6"
+                elif 31 <= stn <= 36:
+                    return "Micky"
+                return None
+
+            def get_call_type_text(type_code):
+                if type_code == 1:
+                    return "Process Call"
+                elif type_code == 2:
+                    return "Material Call"
+                elif type_code == 3:
+                    return "Quality Call"
+                elif type_code == 4:
+                    return "Maintenance Call"
+                return "Other"
+
+            def aggregate_line_stops(records):
+                from collections import defaultdict
+                minutes_map = defaultdict(lambda: defaultdict(int))
+                reason_durations = defaultdict(lambda: defaultdict(int))
+                reason_records = defaultdict(list)
+
+                for row in records:
+                    # ls.DT, ls.LineStopTime, ls.TypeOfCall, ls.TypeOfCallText, ls.ReasonCode, ls.ReasonText, ls.StationNo
+                    dt, stop_time, type_code, type_text, r_code, r_text, stn = row
+                    line = get_station_line(stn)
+                    call_type = get_call_type_text(type_code)
+                    stop_time = int(stop_time) if stop_time is not None else 0
+                    
+                    if line:
+                        minutes_map[call_type][line] += stop_time
+                        if r_text:
+                            reason_durations[(call_type, line)][r_text] += stop_time
+                            reason_records[(call_type, line)].append((stop_time, r_text, stn))
+
+                return minutes_map, reason_durations, reason_records
+
+            # Process Daily Line Stops
+            daily_mins, daily_reasons, daily_records = aggregate_line_stops(daily_line_stops)
+            
+            # Process Monthly Line Stops
+            monthly_mins, monthly_reasons, _ = aggregate_line_stops(monthly_line_stops)
+
+            def fill_line_stop_table(start_row, minutes_map, reason_durations):
+                call_types = ["Process Call", "Material Call", "Quality Call", "Maintenance Call", "Other"]
+                lines = ["I-Puma Sub", "I-Puma Main", "BIW Sub", "BIW Main", "Micky", "D+6"]
+                
+                line_cols = {
+                    "I-Puma Sub": 3,
+                    "I-Puma Main": 4,
+                    "BIW Sub": 5,
+                    "BIW Main": 6,
+                    "Micky": 7,
+                    "D+6": 8
+                }
+                
+                reason_cols = {
+                    "I-Puma Sub": 10,
+                    "I-Puma Main": 11,
+                    "BIW Sub": 12,
+                    "BIW Main": 13,
+                    "Micky": 14,
+                    "D+6": 15
+                }
+                
+                for idx, ct in enumerate(call_types):
+                    r = start_row + idx
+                    ws_ls.cell(row=r, column=2).value = ct
+                    
+                    total_min = 0
+                    for line in lines:
+                        mins = minutes_map[ct][line]
+                        ws_ls.cell(row=r, column=line_cols[line]).value = mins
+                        total_min += mins
+                        
+                        if mins > 0:
+                            reasons = reason_durations[(ct, line)]
+                            if reasons:
+                                top_reason = max(reasons, key=reasons.get)
+                                ws_ls.cell(row=r, column=reason_cols[line]).value = top_reason
+                            else:
+                                ws_ls.cell(row=r, column=reason_cols[line]).value = None
+                        else:
+                            ws_ls.cell(row=r, column=reason_cols[line]).value = None
+                            
+                    ws_ls.cell(row=r, column=9).value = total_min
+
+            fill_line_stop_table(5, daily_mins, daily_reasons)
+            fill_line_stop_table(24, monthly_mins, monthly_reasons)
+
+            # Write Production Loss starting at Row 43
+            prod_loss_row = 43
+            if not daily_prod_loss:
+                for c in range(2, 14):
+                    ws_ls.cell(row=prod_loss_row, column=c).value = None
+            else:
+                for row in daily_prod_loss:
+                    ws_ls.cell(row=prod_loss_row, column=2).value = row[0].strip() if row[0] is not None else None
+                    ws_ls.cell(row=prod_loss_row, column=3).value = row[1]
+                    ws_ls.cell(row=prod_loss_row, column=4).value = row[2]
+                    ws_ls.cell(row=prod_loss_row, column=5).value = row[3]
+                    ws_ls.cell(row=prod_loss_row, column=6).value = row[4]
+                    ws_ls.cell(row=prod_loss_row, column=7).value = row[5]
+                    ws_ls.cell(row=prod_loss_row, column=8).value = row[6]
+                    ws_ls.cell(row=prod_loss_row, column=9).value = row[7]
+                    ws_ls.cell(row=prod_loss_row, column=10).value = row[8]
+                    ws_ls.cell(row=prod_loss_row, column=11).value = row[9]
+                    ws_ls.cell(row=prod_loss_row, column=12).value = row[10]
+                    
+                    dt_val = row[11]
+                    if isinstance(dt_val, (datetime.datetime, datetime.date)):
+                        dt_val = dt_val.strftime("%Y-%m-%d")
+                    ws_ls.cell(row=prod_loss_row, column=13).value = dt_val
+                    prod_loss_row += 1
+
+            # Populate Chassis Line Loss Reason & Remark in SQL Work and PLC Work sheets
+            call_types = ["Process Call", "Material Call", "Quality Call", "Maintenance Call", "Other"]
+            call_type_rows = {
+                "Process Call": 42,
+                "Material Call": 43,
+                "Quality Call": 44,
+                "Maintenance Call": 45,
+                "Other": 46
+            }
+
+            for sname in ["SQL Work", "PLC Work"]:
+                if sname in wb.sheetnames:
+                    ws_work = wb[sname]
+                    for ct in call_types:
+                        r_idx = call_type_rows[ct]
+                        records = daily_records[(ct, "Micky")]
+                        if records:
+                            highest_call = max(records, key=lambda x: x[0])
+                            cell_s = ws_work.cell(row=r_idx, column=19)
+                            if type(cell_s).__name__ == "MergedCell":
+                                # Column S is merged. Write combined text to Column O (15).
+                                ws_work.cell(row=r_idx, column=15).value = f"{highest_call[1]} (Stn {highest_call[2]} - {highest_call[0]} Min)"
+                            else:
+                                # Column S is separate. Write separately.
+                                ws_work.cell(row=r_idx, column=15).value = highest_call[1]
+                                cell_s.value = f"Stn {highest_call[2]} - {highest_call[0]} Min"
+                        else:
+                            # Clear cells/placeholders
+                            ws_work.cell(row=r_idx, column=15).value = None
+                            cell_s = ws_work.cell(row=r_idx, column=19)
+                            if type(cell_s).__name__ != "MergedCell":
+                                cell_s.value = None
 
         # 7. Save and return workbook
         wb.save(output_path)
