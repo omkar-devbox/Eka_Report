@@ -17,7 +17,13 @@ import { apiClient } from "@/app/api/api-client";
 
 export default function Dashboard() {
   // Input fields state initialized with user specified default values
-  const [reportDate, setReportDate] = useState("2026-04-25");
+  const [reportDate, setReportDate] = useState(() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  });
   const [startDate, setStartDate] = useState("2026-04-01");
   const [lastDate, setLastDate] = useState("2027-03-31");
 

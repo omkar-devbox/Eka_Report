@@ -130,18 +130,24 @@ SELECT
     SUM(TARGET) AS MONTHLY_TARGET,
     SUM(ACTUAL) AS MONTHLY_ACTUAL,
 
-    -- Financial Year Total
+    -- Previous Financial Year
     (
         SELECT ISNULL(SUM(TARGET),0)
         FROM FinalData FD
-        WHERE FD.ReportDate BETWEEN @StartDate AND @LastDate
-    ) AS TARGET_FINANCIAL_YEAR,
+        WHERE FD.ReportDate BETWEEN
+              DATEADD(YEAR,-1,@StartDate)
+              AND
+              DATEADD(YEAR,-1,@LastDate)
+    ) AS TARGET_PREVIOUS_FINANCIAL_YEAR,
 
     (
         SELECT ISNULL(SUM(ACTUAL),0)
         FROM FinalData FD
-        WHERE FD.ReportDate BETWEEN @StartDate AND @LastDate
-    ) AS ACTUAL_FINANCIAL_YEAR,
+        WHERE FD.ReportDate BETWEEN
+              DATEADD(YEAR,-1,@StartDate)
+              AND
+              DATEADD(YEAR,-1,@LastDate)
+    ) AS ACTUAL_PREVIOUS_FINANCIAL_YEAR,
 
     -- MTD (Month To Date)
     (
@@ -159,9 +165,7 @@ SELECT
               DATEFROMPARTS(YEAR(@ReportDate),MONTH(@ReportDate),1)
               AND @ReportDate
     ) AS MTD_ACTUAL,
-
-    -- YTD (FY Start To Report Date)
-    (
+     (
         SELECT ISNULL(SUM(TARGET),0)
         FROM FinalData FD
         WHERE FD.ReportDate BETWEEN @StartDate AND @ReportDate
@@ -171,8 +175,10 @@ SELECT
         SELECT ISNULL(SUM(ACTUAL),0)
         FROM FinalData FD
         WHERE FD.ReportDate BETWEEN @StartDate AND @ReportDate
-    ) AS YTD_ACTUAL
+    ) AS YTD_ACTUAL,
 
+    -- Auto Detect Month Days (28/29/30/31)
+    DAY(EOMONTH(@ReportDate)) AS DAYS_IN_MONTH
 FROM MonthData;
 """
 
@@ -308,18 +314,24 @@ SELECT
     SUM(TARGET) AS MONTHLY_TARGET,
     SUM(ACTUAL) AS MONTHLY_ACTUAL,
 
-    -- Financial Year Total
+    -- Previous Financial Year
     (
         SELECT ISNULL(SUM(TARGET),0)
         FROM FinalData FD
-        WHERE FD.ReportDate BETWEEN @StartDate AND @LastDate
-    ) AS TARGET_FINANCIAL_YEAR,
+        WHERE FD.ReportDate BETWEEN
+              DATEADD(YEAR,-1,@StartDate)
+              AND
+              DATEADD(YEAR,-1,@LastDate)
+    ) AS TARGET_PREVIOUS_FINANCIAL_YEAR,
 
     (
         SELECT ISNULL(SUM(ACTUAL),0)
         FROM FinalData FD
-        WHERE FD.ReportDate BETWEEN @StartDate AND @LastDate
-    ) AS ACTUAL_FINANCIAL_YEAR,
+        WHERE FD.ReportDate BETWEEN
+              DATEADD(YEAR,-1,@StartDate)
+              AND
+              DATEADD(YEAR,-1,@LastDate)
+    ) AS ACTUAL_PREVIOUS_FINANCIAL_YEAR,
 
     -- MTD (Month To Date)
     (
@@ -349,8 +361,10 @@ SELECT
         SELECT ISNULL(SUM(ACTUAL),0)
         FROM FinalData FD
         WHERE FD.ReportDate BETWEEN @StartDate AND @ReportDate
-    ) AS YTD_ACTUAL
+    ) AS YTD_ACTUAL,
 
+    -- Auto Detect Month Days (28/29/30/31)
+    DAY(EOMONTH(@ReportDate)) AS DAYS_IN_MONTH
 FROM MonthData;
 """
 
@@ -486,18 +500,24 @@ SELECT
     SUM(TARGET) AS MONTHLY_TARGET,
     SUM(ACTUAL) AS MONTHLY_ACTUAL,
 
-    -- Financial Year Total
+    -- Previous Financial Year
     (
         SELECT ISNULL(SUM(TARGET),0)
         FROM FinalData FD
-        WHERE FD.ReportDate BETWEEN @StartDate AND @LastDate
-    ) AS TARGET_FINANCIAL_YEAR,
+        WHERE FD.ReportDate BETWEEN
+              DATEADD(YEAR,-1,@StartDate)
+              AND
+              DATEADD(YEAR,-1,@LastDate)
+    ) AS TARGET_PREVIOUS_FINANCIAL_YEAR,
 
     (
         SELECT ISNULL(SUM(ACTUAL),0)
         FROM FinalData FD
-        WHERE FD.ReportDate BETWEEN @StartDate AND @LastDate
-    ) AS ACTUAL_FINANCIAL_YEAR,
+        WHERE FD.ReportDate BETWEEN
+              DATEADD(YEAR,-1,@StartDate)
+              AND
+              DATEADD(YEAR,-1,@LastDate)
+    ) AS ACTUAL_PREVIOUS_FINANCIAL_YEAR,
 
     -- MTD (Month To Date)
     (
@@ -527,8 +547,10 @@ SELECT
         SELECT ISNULL(SUM(ACTUAL),0)
         FROM FinalData FD
         WHERE FD.ReportDate BETWEEN @StartDate AND @ReportDate
-    ) AS YTD_ACTUAL
+    ) AS YTD_ACTUAL,
 
+    -- Auto Detect Month Days (28/29/30/31)
+    DAY(EOMONTH(@ReportDate)) AS DAYS_IN_MONTH
 FROM MonthData;
 """
 
@@ -664,18 +686,24 @@ SELECT
     SUM(TARGET) AS MONTHLY_TARGET,
     SUM(ACTUAL) AS MONTHLY_ACTUAL,
 
-    -- Financial Year Total
+    -- Previous Financial Year
     (
         SELECT ISNULL(SUM(TARGET),0)
         FROM FinalData FD
-        WHERE FD.ReportDate BETWEEN @StartDate AND @LastDate
-    ) AS TARGET_FINANCIAL_YEAR,
+        WHERE FD.ReportDate BETWEEN
+              DATEADD(YEAR,-1,@StartDate)
+              AND
+              DATEADD(YEAR,-1,@LastDate)
+    ) AS TARGET_PREVIOUS_FINANCIAL_YEAR,
 
     (
         SELECT ISNULL(SUM(ACTUAL),0)
         FROM FinalData FD
-        WHERE FD.ReportDate BETWEEN @StartDate AND @LastDate
-    ) AS ACTUAL_FINANCIAL_YEAR,
+        WHERE FD.ReportDate BETWEEN
+              DATEADD(YEAR,-1,@StartDate)
+              AND
+              DATEADD(YEAR,-1,@LastDate)
+    ) AS ACTUAL_PREVIOUS_FINANCIAL_YEAR,
 
     -- MTD (Month To Date)
     (
@@ -705,40 +733,175 @@ SELECT
         SELECT ISNULL(SUM(ACTUAL),0)
         FROM FinalData FD
         WHERE FD.ReportDate BETWEEN @StartDate AND @ReportDate
-    ) AS YTD_ACTUAL
+    ) AS YTD_ACTUAL,
 
+    -- Auto Detect Month Days (28/29/30/31)
+    DAY(EOMONTH(@ReportDate)) AS DAYS_IN_MONTH
 FROM MonthData;
 """
 
 def LineStopRecordDaily(ReportDate) -> str:
     return f"""
+WITH CH AS
+(
+    SELECT 31 AS StationNo, DT, Reason, Remark, LossTime FROM dbo.CH_S1
+    UNION ALL SELECT 32, DT, Reason, Remark, LossTime FROM dbo.CH_S2
+    UNION ALL SELECT 33, DT, Reason, Remark, LossTime FROM dbo.CH_S3
+    UNION ALL SELECT 34, DT, Reason, Remark, LossTime FROM dbo.CH_S4
+    UNION ALL SELECT 35, DT, Reason, Remark, LossTime FROM dbo.CH_S5
+    UNION ALL SELECT 36, DT, Reason, Remark, LossTime FROM dbo.CH_S6
+),
+
+BaseData AS
+(
+    SELECT
+        ls.DT,
+        ls.StationNo,
+        ls.LineStopTime,
+
+        CASE
+            WHEN ls.TypeOfCall = 1 THEN 'Process Call'
+            WHEN ls.TypeOfCall = 2 THEN 'Material Call'
+            WHEN ls.TypeOfCall = 3 THEN 'Quality Call'
+            WHEN ls.TypeOfCall = 4 THEN 'Maintenance Call'
+            ELSE 'Other'
+        END AS TypeOfCallText,
+
+        CASE
+            WHEN ls.TypeOfCall = 1 THEN pc.Reason
+            WHEN ls.TypeOfCall = 2 THEN sc.Reason
+            WHEN ls.TypeOfCall = 3 THEN qc.Reason
+            WHEN ls.TypeOfCall = 4 THEN mc.Reason
+        END AS LineLossReason,
+
+        CHRemark.Remark AS StationRemark,
+
+        CASE
+            WHEN ls.StationNo BETWEEN 31 AND 36 THEN 'Chassis'
+            WHEN ls.StationNo BETWEEN 25 AND 30 THEN 'Trim'
+            WHEN ls.StationNo BETWEEN 18 AND 24 THEN 'Saarthi Main'
+            WHEN ls.StationNo BETWEEN 14 AND 17 THEN 'Saarthi Sub'
+            WHEN ls.StationNo BETWEEN 5  AND 13 THEN 'I-PUMA Main'
+            WHEN ls.StationNo BETWEEN 1  AND 4  THEN 'I-PUMA Sub'
+            WHEN ls.StationNo BETWEEN 37 AND 42 THEN 'Cargo Main'
+            WHEN ls.StationNo BETWEEN 43 AND 46 THEN 'Cargo Sub'
+        END AS StationGroup
+
+    FROM dbo.LineStopRecord ls
+
+    LEFT JOIN dbo.Process_Call pc
+        ON ls.Reason = pc.Sr_No
+       AND ls.TypeOfCall = 1
+
+    LEFT JOIN dbo.Store_Call sc
+        ON ls.Reason = sc.Sr_No
+       AND ls.TypeOfCall = 2
+
+    LEFT JOIN dbo.Quality_Call qc
+        ON ls.Reason = qc.Sr_No
+       AND ls.TypeOfCall = 3
+
+    LEFT JOIN dbo.Maintenance_Call mc
+        ON ls.Reason = mc.Sr_No
+       AND ls.TypeOfCall = 4
+
+    OUTER APPLY
+    (
+        SELECT TOP 1
+            LTRIM(RTRIM(ch.Remark)) AS Remark
+        FROM CH ch
+        WHERE ch.StationNo = ls.StationNo
+          AND CAST(ch.DT AS DATE) = CAST(ls.DT AS DATE)
+          AND ch.Remark IS NOT NULL
+          AND LTRIM(RTRIM(ch.Remark)) NOT IN ('', '0', 'null')
+        ORDER BY ABS(DATEDIFF(SECOND, ch.DT, ls.DT))
+    ) CHRemark
+
+    WHERE CAST(ls.DT AS DATE) = '{ReportDate}'
+),
+
+AggData AS
+(
+    SELECT
+        TypeOfCallText,
+        StationGroup,
+        SUM(LineStopTime) AS TotalLossTime,
+        COUNT(*) AS LossCount
+    FROM BaseData
+    GROUP BY
+        TypeOfCallText,
+        StationGroup
+),
+
+MaxReason AS
+(
+    SELECT
+        TypeOfCallText,
+        LineLossReason,
+        StationRemark,
+        ROW_NUMBER() OVER
+        (
+            PARTITION BY TypeOfCallText
+            ORDER BY LineStopTime DESC, DT DESC
+        ) AS RN
+    FROM BaseData
+    WHERE StationGroup = 'Chassis'
+)
+
 SELECT
-    ls.DT,
-    ls.LineStopTime,
-    ls.TypeOfCall,
-    CASE 
-        WHEN ls.TypeOfCall = 1 THEN 'Process Call'
-        WHEN ls.TypeOfCall = 2 THEN 'Material Call'
-        WHEN ls.TypeOfCall = 3 THEN 'Quality Call'
-        WHEN ls.TypeOfCall = 4 THEN 'Maintenance Call'
-        ELSE 'Other'
-    END AS TypeOfCallText,
-    ls.Reason AS ReasonCode,
-    CASE
-        WHEN ls.TypeOfCall = 1 THEN pc.Reason
-        WHEN ls.TypeOfCall = 2 THEN sc.Reason
-        WHEN ls.TypeOfCall = 3 THEN qc.Reason
-        WHEN ls.TypeOfCall = 4 THEN mc.Reason
-        ELSE NULL
-    END AS ReasonText,
-    ls.StationNo
-FROM [TRIM_PC].[dbo].[LineStopRecord] ls
-LEFT JOIN [TRIM_PC].[dbo].[Process_Call] pc ON ls.Reason = pc.Sr_No AND ls.TypeOfCall = 1
-LEFT JOIN [TRIM_PC].[dbo].[Store_Call] sc ON ls.Reason = sc.Sr_No AND ls.TypeOfCall = 2
-LEFT JOIN [TRIM_PC].[dbo].[Quality_Call] qc ON ls.Reason = qc.Sr_No AND ls.TypeOfCall = 3
-LEFT JOIN [TRIM_PC].[dbo].[Maintenance_Call] mc ON ls.Reason = mc.Sr_No AND ls.TypeOfCall = 4
-WHERE CAST(ls.DT AS DATE) = '{ReportDate}'
-ORDER BY ls.DT ASC;
+    A.TypeOfCallText,
+
+    SUM(CASE WHEN A.StationGroup='Chassis'
+             THEN A.TotalLossTime ELSE 0 END) AS Chassis,
+
+    SUM(CASE WHEN A.StationGroup='Trim'
+             THEN A.TotalLossTime ELSE 0 END) AS Trim,
+
+    SUM(CASE WHEN A.StationGroup='Saarthi Main'
+             THEN A.TotalLossTime ELSE 0 END) AS [Saarthi Main],
+
+    SUM(CASE WHEN A.StationGroup='Saarthi Sub'
+             THEN A.TotalLossTime ELSE 0 END) AS [Saarthi Sub],
+
+    SUM(CASE WHEN A.StationGroup='I-PUMA Main'
+             THEN A.TotalLossTime ELSE 0 END) AS [I-PUMA Main],
+
+    SUM(CASE WHEN A.StationGroup='I-PUMA Sub'
+             THEN A.TotalLossTime ELSE 0 END) AS [I-PUMA Sub],
+
+    SUM(CASE WHEN A.StationGroup='Cargo Main'
+             THEN A.TotalLossTime ELSE 0 END) AS [Cargo Main],
+
+    SUM(CASE WHEN A.StationGroup='Cargo Sub'
+             THEN A.TotalLossTime ELSE 0 END) AS [Cargo Sub],
+
+    MAX(MR.LineLossReason) AS [Chassis Line Loss Reason],
+    MAX(MR.StationRemark)  AS [Remark]
+
+FROM AggData A
+
+LEFT JOIN
+(
+    SELECT
+        TypeOfCallText,
+        LineLossReason,
+        StationRemark
+    FROM MaxReason
+    WHERE RN = 1
+) MR
+ON A.TypeOfCallText = MR.TypeOfCallText
+
+GROUP BY
+    A.TypeOfCallText
+
+ORDER BY
+CASE A.TypeOfCallText
+    WHEN 'Process Call' THEN 1
+    WHEN 'Material Call' THEN 2
+    WHEN 'Quality Call' THEN 3
+    WHEN 'Maintenance Call' THEN 4
+    ELSE 5
+END;
 """
 
 def LineStopRecordMonthly(ReportDate) -> str:
@@ -756,6 +919,120 @@ SELECT
     END AS TypeOfCallText,
     ls.Reason AS ReasonCode,
     CASE
+        WHEN ls.StationNo = 31 THEN 
+            COALESCE(
+                (
+                    SELECT TOP 1 LTRIM(RTRIM(ch.Remark))
+                    FROM dbo.CH_S1 ch
+                    WHERE CAST(ch.DT AS DATE) = CAST(ls.DT AS DATE)
+                      AND ch.Reason = ls.Reason
+                      AND ch.Remark IS NOT NULL AND LTRIM(RTRIM(ch.Remark)) NOT IN ('0', 'null', '')
+                    ORDER BY ABS(DATEDIFF(second, ch.DT, ls.DT)) ASC
+                ),
+                (
+                    SELECT TOP 1 LTRIM(RTRIM(ch.Remark))
+                    FROM dbo.CH_S1 ch
+                    WHERE CAST(ch.DT AS DATE) = CAST(ls.DT AS DATE)
+                      AND ch.Remark IS NOT NULL AND LTRIM(RTRIM(ch.Remark)) NOT IN ('0', 'null', '')
+                    ORDER BY ABS(DATEDIFF(second, ch.DT, ls.DT)) ASC
+                ),
+                pc.Reason, sc.Reason, qc.Reason, mc.Reason
+            )
+        WHEN ls.StationNo = 32 THEN 
+            COALESCE(
+                (
+                    SELECT TOP 1 LTRIM(RTRIM(ch.Remark))
+                    FROM dbo.CH_S2 ch
+                    WHERE CAST(ch.DT AS DATE) = CAST(ls.DT AS DATE)
+                      AND ch.Reason = ls.Reason
+                      AND ch.Remark IS NOT NULL AND LTRIM(RTRIM(ch.Remark)) NOT IN ('0', 'null', '')
+                    ORDER BY ABS(DATEDIFF(second, ch.DT, ls.DT)) ASC
+                ),
+                (
+                    SELECT TOP 1 LTRIM(RTRIM(ch.Remark))
+                    FROM dbo.CH_S2 ch
+                    WHERE CAST(ch.DT AS DATE) = CAST(ls.DT AS DATE)
+                      AND ch.Remark IS NOT NULL AND LTRIM(RTRIM(ch.Remark)) NOT IN ('0', 'null', '')
+                    ORDER BY ABS(DATEDIFF(second, ch.DT, ls.DT)) ASC
+                ),
+                pc.Reason, sc.Reason, qc.Reason, mc.Reason
+            )
+        WHEN ls.StationNo = 33 THEN 
+            COALESCE(
+                (
+                    SELECT TOP 1 LTRIM(RTRIM(ch.Remark))
+                    FROM dbo.CH_S3 ch
+                    WHERE CAST(ch.DT AS DATE) = CAST(ls.DT AS DATE)
+                      AND ch.Reason = ls.Reason
+                      AND ch.Remark IS NOT NULL AND LTRIM(RTRIM(ch.Remark)) NOT IN ('0', 'null', '')
+                    ORDER BY ABS(DATEDIFF(second, ch.DT, ls.DT)) ASC
+                ),
+                (
+                    SELECT TOP 1 LTRIM(RTRIM(ch.Remark))
+                    FROM dbo.CH_S3 ch
+                    WHERE CAST(ch.DT AS DATE) = CAST(ls.DT AS DATE)
+                      AND ch.Remark IS NOT NULL AND LTRIM(RTRIM(ch.Remark)) NOT IN ('0', 'null', '')
+                    ORDER BY ABS(DATEDIFF(second, ch.DT, ls.DT)) ASC
+                ),
+                pc.Reason, sc.Reason, qc.Reason, mc.Reason
+            )
+        WHEN ls.StationNo = 34 THEN 
+            COALESCE(
+                (
+                    SELECT TOP 1 LTRIM(RTRIM(ch.Remark))
+                    FROM dbo.CH_S4 ch
+                    WHERE CAST(ch.DT AS DATE) = CAST(ls.DT AS DATE)
+                      AND ch.Reason = ls.Reason
+                      AND ch.Remark IS NOT NULL AND LTRIM(RTRIM(ch.Remark)) NOT IN ('0', 'null', '')
+                    ORDER BY ABS(DATEDIFF(second, ch.DT, ls.DT)) ASC
+                ),
+                (
+                    SELECT TOP 1 LTRIM(RTRIM(ch.Remark))
+                    FROM dbo.CH_S4 ch
+                    WHERE CAST(ch.DT AS DATE) = CAST(ls.DT AS DATE)
+                      AND ch.Remark IS NOT NULL AND LTRIM(RTRIM(ch.Remark)) NOT IN ('0', 'null', '')
+                    ORDER BY ABS(DATEDIFF(second, ch.DT, ls.DT)) ASC
+                ),
+                pc.Reason, sc.Reason, qc.Reason, mc.Reason
+            )
+        WHEN ls.StationNo = 35 THEN 
+            COALESCE(
+                (
+                    SELECT TOP 1 LTRIM(RTRIM(ch.Remark))
+                    FROM dbo.CH_S5 ch
+                    WHERE CAST(ch.DT AS DATE) = CAST(ls.DT AS DATE)
+                      AND ch.Reason = ls.Reason
+                      AND ch.Remark IS NOT NULL AND LTRIM(RTRIM(ch.Remark)) NOT IN ('0', 'null', '')
+                    ORDER BY ABS(DATEDIFF(second, ch.DT, ls.DT)) ASC
+                ),
+                (
+                    SELECT TOP 1 LTRIM(RTRIM(ch.Remark))
+                    FROM dbo.CH_S5 ch
+                    WHERE CAST(ch.DT AS DATE) = CAST(ls.DT AS DATE)
+                      AND ch.Remark IS NOT NULL AND LTRIM(RTRIM(ch.Remark)) NOT IN ('0', 'null', '')
+                    ORDER BY ABS(DATEDIFF(second, ch.DT, ls.DT)) ASC
+                ),
+                pc.Reason, sc.Reason, qc.Reason, mc.Reason
+            )
+        WHEN ls.StationNo = 36 THEN 
+            COALESCE(
+                (
+                    SELECT TOP 1 LTRIM(RTRIM(ch.Remark))
+                    FROM dbo.CH_S6 ch
+                    WHERE CAST(ch.DT AS DATE) = CAST(ls.DT AS DATE)
+                      AND ch.Reason = ls.Reason
+                      AND ch.Remark IS NOT NULL AND LTRIM(RTRIM(ch.Remark)) NOT IN ('0', 'null', '')
+                    ORDER BY ABS(DATEDIFF(second, ch.DT, ls.DT)) ASC
+                ),
+                (
+                    SELECT TOP 1 LTRIM(RTRIM(ch.Remark))
+                    FROM dbo.CH_S6 ch
+                    WHERE CAST(ch.DT AS DATE) = CAST(ls.DT AS DATE)
+                      AND ch.Remark IS NOT NULL AND LTRIM(RTRIM(ch.Remark)) NOT IN ('0', 'null', '')
+                    ORDER BY ABS(DATEDIFF(second, ch.DT, ls.DT)) ASC
+                ),
+                pc.Reason, sc.Reason, qc.Reason, mc.Reason
+            )
         WHEN ls.TypeOfCall = 1 THEN pc.Reason
         WHEN ls.TypeOfCall = 2 THEN sc.Reason
         WHEN ls.TypeOfCall = 3 THEN qc.Reason
@@ -763,11 +1040,11 @@ SELECT
         ELSE NULL
     END AS ReasonText,
     ls.StationNo
-FROM [TRIM_PC].[dbo].[LineStopRecord] ls
-LEFT JOIN [TRIM_PC].[dbo].[Process_Call] pc ON ls.Reason = pc.Sr_No AND ls.TypeOfCall = 1
-LEFT JOIN [TRIM_PC].[dbo].[Store_Call] sc ON ls.Reason = sc.Sr_No AND ls.TypeOfCall = 2
-LEFT JOIN [TRIM_PC].[dbo].[Quality_Call] qc ON ls.Reason = qc.Sr_No AND ls.TypeOfCall = 3
-LEFT JOIN [TRIM_PC].[dbo].[Maintenance_Call] mc ON ls.Reason = mc.Sr_No AND ls.TypeOfCall = 4
+FROM dbo.LineStopRecord ls
+LEFT JOIN dbo.Process_Call pc ON ls.Reason = pc.Sr_No AND ls.TypeOfCall = 1
+LEFT JOIN dbo.Store_Call sc ON ls.Reason = sc.Sr_No AND ls.TypeOfCall = 2
+LEFT JOIN dbo.Quality_Call qc ON ls.Reason = qc.Sr_No AND ls.TypeOfCall = 3
+LEFT JOIN dbo.Maintenance_Call mc ON ls.Reason = mc.Sr_No AND ls.TypeOfCall = 4
 WHERE YEAR(ls.DT) = YEAR('{ReportDate}') AND MONTH(ls.DT) = MONTH('{ReportDate}')
 ORDER BY ls.DT ASC;
 """
@@ -787,7 +1064,115 @@ SELECT
     ShiftWorkingTime,
     OEE,
     DT
-FROM [TRIM_PC].[dbo].[Production_Loss]
+FROM dbo.Production_Loss
 WHERE CAST(DT AS DATE) = '{ReportDate}'
 ORDER BY Shift ASC;
 """
+
+def ChassisLineStatus(ReportDate) -> str:
+    return f"""
+WITH CH_All AS
+(
+    SELECT 'CH-10' AS StationNumber, Typeofcall, Remark, LossTime, DT FROM dbo.CH_S1
+    UNION ALL
+    SELECT 'CH-20', Typeofcall, Remark, LossTime, DT FROM dbo.CH_S2
+    UNION ALL
+    SELECT 'CH-30', Typeofcall, Remark, LossTime, DT FROM dbo.CH_S3
+    UNION ALL
+    SELECT 'CH-40', Typeofcall, Remark, LossTime, DT FROM dbo.CH_S4
+    UNION ALL
+    SELECT 'CH-50', Typeofcall, Remark, LossTime, DT FROM dbo.CH_S5
+    UNION ALL
+    SELECT 'CH-60', Typeofcall, Remark, LossTime, DT FROM dbo.CH_S6
+),
+BaseData AS
+(
+    SELECT
+        StationNumber,
+        Typeofcall,
+        LossTime,
+        Remark,
+        DT
+    FROM CH_All
+    WHERE CAST(DT AS DATE) = '{ReportDate}'
+),
+AggData AS
+(
+    SELECT
+        StationNumber,
+        ISNULL(SUM(CASE WHEN Typeofcall = 1 THEN LossTime ELSE 0 END), 0) AS ProcessLoss,
+        ISNULL(SUM(CASE WHEN Typeofcall = 2 THEN LossTime ELSE 0 END), 0) AS MaterialLoss,
+        ISNULL(SUM(CASE WHEN Typeofcall = 3 THEN LossTime ELSE 0 END), 0) AS QualityLoss,
+        ISNULL(SUM(CASE WHEN Typeofcall = 4 THEN LossTime ELSE 0 END), 0) AS MaintLoss,
+        ISNULL(SUM(CASE WHEN Typeofcall NOT IN (1,2,3,4) OR Typeofcall IS NULL THEN LossTime ELSE 0 END), 0) AS OtherLoss,
+        ISNULL(SUM(LossTime), 0) AS TotalLoss,
+        COUNT(*) AS RecordCount
+    FROM BaseData
+    GROUP BY StationNumber
+),
+MaxRemark AS
+(
+    SELECT
+        StationNumber,
+        Remark,
+        ROW_NUMBER() OVER (PARTITION BY StationNumber ORDER BY LossTime DESC, DT DESC) AS RN
+    FROM BaseData
+    WHERE Remark IS NOT NULL AND LTRIM(RTRIM(Remark)) NOT IN ('', '0', 'null')
+),
+ProdLoss AS
+(
+    SELECT TOP 1
+        Shift,
+        ShiftStart,
+        ShiftEnd,
+        ProdCount,
+        ProdLoss,
+        ShiftTime,
+        BreakTime,
+        LinePause,
+        DownTime,
+        ShiftWorkingTime,
+        OEE
+    FROM dbo.Production_Loss
+    WHERE CAST(DT AS DATE) = '{ReportDate}'
+    ORDER BY Shift ASC
+)
+SELECT
+    S.StationNumber,
+    ISNULL(A.ProcessLoss, 0) AS ProcessLoss,
+    ISNULL(A.MaterialLoss, 0) AS MaterialLoss,
+    ISNULL(A.QualityLoss, 0) AS QualityLoss,
+    ISNULL(A.MaintLoss, 0) AS MaintLoss,
+    ISNULL(A.OtherLoss, 0) AS OtherLoss,
+    ISNULL(A.TotalLoss, 0) AS TotalLoss,
+    ISNULL(A.RecordCount, 0) AS RecordCount,
+    MR.Remark,
+    
+    -- Production Loss columns
+    PL.Shift,
+    PL.ShiftStart,
+    PL.ShiftEnd,
+    PL.ProdCount,
+    PL.ProdLoss,
+    PL.ShiftTime,
+    PL.BreakTime,
+    PL.LinePause,
+    PL.DownTime,
+    PL.ShiftWorkingTime,
+    PL.OEE
+
+FROM (
+    SELECT 'CH-10' AS StationNumber
+    UNION ALL SELECT 'CH-20'
+    UNION ALL SELECT 'CH-30'
+    UNION ALL SELECT 'CH-40'
+    UNION ALL SELECT 'CH-50'
+    UNION ALL SELECT 'CH-60'
+) S
+LEFT JOIN AggData A ON S.StationNumber = A.StationNumber
+LEFT JOIN MaxRemark MR ON S.StationNumber = MR.StationNumber AND MR.RN = 1
+LEFT JOIN ProdLoss PL ON 1=1
+ORDER BY S.StationNumber;
+"""
+
+

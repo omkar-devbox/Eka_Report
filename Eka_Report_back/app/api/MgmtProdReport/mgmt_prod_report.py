@@ -18,7 +18,8 @@ from app.constant.queris import (
     S_TCF,
     LineStopRecordDaily,
     LineStopRecordMonthly,
-    ProductionLossDaily
+    ProductionLossDaily,
+    ChassisLineStatus
 )
 
 router = APIRouter()
@@ -43,6 +44,10 @@ def generate_mgmt_production_report(
     def safe_int(value):
         return int(value) if value is not None else 0
 
+    def to_mins(seconds):
+        mins = float(seconds) / 60.0 if seconds is not None else 0.0
+        return int(mins) if mins % 1 == 0 else round(mins, 1)
+
     try:
         # 1. Parse and validate dates
         try:
@@ -53,7 +58,8 @@ def generate_mgmt_production_report(
             downloads_dir = Path.home() / "Downloads"
             if not downloads_dir.exists():
                 downloads_dir = Path.home()
-            output_path = downloads_dir / f"EKA Production Report_R2_{report_date:%Y-%m-%d}.xlsx"
+            now_str = datetime.datetime.now().strftime("%H-%M-%S")
+            output_path = downloads_dir / f"EKA Production Report_R2_{report_date:%Y-%m-%d}_{now_str}.xlsx"
         except ValueError as val_err:
             raise HTTPException(
                 status_code=400,
@@ -88,6 +94,9 @@ def generate_mgmt_production_report(
 
         cursor.execute(ProductionLossDaily(payload.ReportDate))
         daily_prod_loss = cursor.fetchall()
+
+        cursor.execute(ChassisLineStatus(payload.ReportDate))
+        chassis_line_status = cursor.fetchall()
         
         cursor.close()
 
@@ -348,7 +357,12 @@ def generate_mgmt_production_report(
                 cell_E18.number_format = '@'
                 cell_E18.value = safe_int(rows2[0][14])
 
-                # FY Year (Actual)
+                # FY Year (Actual) Chassis
+                cell_C17 = ws.cell(row=17, column=3)
+                cell_C17.number_format = '@'
+                cell_C17.value = safe_int(rows2[0][15])
+
+                # FY Year (Actual) BIW
                 cell_C18 = ws.cell(row=18, column=3)
                 cell_C18.number_format = '@'
                 cell_C18.value = safe_int(rows2[0][16])
@@ -397,7 +411,12 @@ def generate_mgmt_production_report(
                 cell_F18.number_format = '@'
                 cell_F18.value = safe_int(rows3[0][14])
 
-                # FY Year (Actual)
+                # FY Year (Actual) Chassis
+                cell_D17 = ws.cell(row=17, column=4)
+                cell_D17.number_format = '@'
+                cell_D17.value = safe_int(rows3[0][15])
+
+                # FY Year (Actual) BIW
                 cell_D18 = ws.cell(row=18, column=4)
                 cell_D18.number_format = '@'
                 cell_D18.value = safe_int(rows3[0][16])
@@ -445,8 +464,8 @@ def generate_mgmt_production_report(
 
             def aggregate_line_stops(records):
                 from collections import defaultdict
-                minutes_map = defaultdict(lambda: defaultdict(int))
-                reason_durations = defaultdict(lambda: defaultdict(int))
+                minutes_map = defaultdict(lambda: defaultdict(float))
+                reason_durations = defaultdict(lambda: defaultdict(float))
                 reason_records = defaultdict(list)
 
                 for row in records:
@@ -454,19 +473,62 @@ def generate_mgmt_production_report(
                     dt, stop_time, type_code, type_text, r_code, r_text, stn = row
                     line = get_station_line(stn)
                     call_type = get_call_type_text(type_code)
-                    stop_time = int(stop_time) if stop_time is not None else 0
+                    
+                    # stop_time from query is raw seconds
+                    stop_time_sec = float(stop_time) if stop_time is not None else 0.0
+                    stop_time_min = stop_time_sec / 60.0
                     
                     if line:
-                        minutes_map[call_type][line] += stop_time
-                        if r_text:
-                            reason_durations[(call_type, line)][r_text] += stop_time
-                            reason_records[(call_type, line)].append((stop_time, r_text, stn))
+                        minutes_map[call_type][line] += stop_time_min
+                        r_text_val = r_text if r_text else (f"Reason {r_code}" if r_code is not None else "Other")
+                        reason_durations[(call_type, line)][r_text_val] += stop_time_min
+                        reason_records[(call_type, line)].append((stop_time_sec, r_text_val, stn))
 
                 return minutes_map, reason_durations, reason_records
 
-            # Process Daily Line Stops
-            daily_mins, daily_reasons, daily_records = aggregate_line_stops(daily_line_stops)
+            # Process Daily Line Stops (aggregated in SQL query)
+            daily_mins = {}
+            daily_chassis_reasons = {}
+            daily_chassis_remarks = {}
             
+            call_types = ["Process Call", "Material Call", "Quality Call", "Maintenance Call", "Other"]
+            for ct in call_types:
+                daily_mins[ct] = {
+                    "I-Puma Sub": 0.0,
+                    "I-Puma Main": 0.0,
+                    "BIW Sub": 0.0,
+                    "BIW Main": 0.0,
+                    "Micky": 0.0,
+                    "D+6": 0.0
+                }
+                daily_chassis_reasons[ct] = None
+                daily_chassis_remarks[ct] = None
+                
+            for row in daily_line_stops:
+                # row: TypeOfCallText, Chassis, Trim, [Saarthi Main], [Saarthi Sub], [I-PUMA Main], [I-PUMA Sub], [Cargo Main], [Cargo Sub], [Chassis Line Loss Reason], [Remark]
+                ct = row[0]
+                if ct not in daily_mins:
+                    continue
+                
+                # The SQL returns time in seconds. We convert to minutes.
+                daily_mins[ct]["Micky"] = (float(row[1]) if row[1] is not None else 0.0) / 60.0
+                daily_mins[ct]["D+6"] = (float(row[2]) if row[2] is not None else 0.0) / 60.0
+                daily_mins[ct]["BIW Main"] = (float(row[3]) if row[3] is not None else 0.0) / 60.0
+                daily_mins[ct]["BIW Sub"] = (float(row[4]) if row[4] is not None else 0.0) / 60.0
+                daily_mins[ct]["I-Puma Main"] = (float(row[5]) if row[5] is not None else 0.0) / 60.0
+                daily_mins[ct]["I-Puma Sub"] = (float(row[6]) if row[6] is not None else 0.0) / 60.0
+                
+                daily_chassis_reasons[ct] = row[9]
+                daily_chassis_remarks[ct] = row[10]
+                
+            # Create a dummy daily_reasons dictionary mapping (call_type, line) to top reason so we can reuse fill_line_stop_table unchanged
+            daily_reasons = {}
+            for ct in call_types:
+                for line in ["I-Puma Sub", "I-Puma Main", "BIW Sub", "BIW Main", "Micky", "D+6"]:
+                    daily_reasons[(ct, line)] = {}
+                if daily_chassis_reasons[ct]:
+                    daily_reasons[(ct, "Micky")] = {daily_chassis_reasons[ct]: 1.0}
+
             # Process Monthly Line Stops
             monthly_mins, monthly_reasons, _ = aggregate_line_stops(monthly_line_stops)
 
@@ -496,10 +558,11 @@ def generate_mgmt_production_report(
                     r = start_row + idx
                     ws_ls.cell(row=r, column=2).value = ct
                     
-                    total_min = 0
+                    total_min = 0.0
                     for line in lines:
                         mins = minutes_map[ct][line]
-                        ws_ls.cell(row=r, column=line_cols[line]).value = mins
+                        mins_val = int(mins) if mins % 1 == 0 else round(mins, 1)
+                        ws_ls.cell(row=r, column=line_cols[line]).value = mins_val
                         total_min += mins
                         
                         if mins > 0:
@@ -512,7 +575,8 @@ def generate_mgmt_production_report(
                         else:
                             ws_ls.cell(row=r, column=reason_cols[line]).value = None
                             
-                    ws_ls.cell(row=r, column=9).value = total_min
+                    total_min_val = int(total_min) if total_min % 1 == 0 else round(total_min, 1)
+                    ws_ls.cell(row=r, column=9).value = total_min_val
 
             fill_line_stop_table(5, daily_mins, daily_reasons)
             fill_line_stop_table(24, monthly_mins, monthly_reasons)
@@ -557,23 +621,119 @@ def generate_mgmt_production_report(
                     ws_work = wb[sname]
                     for ct in call_types:
                         r_idx = call_type_rows[ct]
-                        records = daily_records[(ct, "Micky")]
-                        if records:
-                            highest_call = max(records, key=lambda x: x[0])
-                            cell_s = ws_work.cell(row=r_idx, column=19)
-                            if type(cell_s).__name__ == "MergedCell":
-                                # Column S is merged. Write combined text to Column O (15).
-                                ws_work.cell(row=r_idx, column=15).value = f"{highest_call[1]} (Stn {highest_call[2]} - {highest_call[0]} Min)"
+                        reason_val = daily_chassis_reasons.get(ct)
+                        remark_val = daily_chassis_remarks.get(ct)
+                        
+                        cell_s = ws_work.cell(row=r_idx, column=19)
+                        if type(cell_s).__name__ == "MergedCell":
+                            if reason_val or remark_val:
+                                comb = f"{reason_val or ''}"
+                                if remark_val:
+                                    comb += f" ({remark_val})"
+                                ws_work.cell(row=r_idx, column=15).value = comb.strip()
                             else:
-                                # Column S is separate. Write separately.
-                                ws_work.cell(row=r_idx, column=15).value = highest_call[1]
-                                cell_s.value = f"Stn {highest_call[2]} - {highest_call[0]} Min"
+                                ws_work.cell(row=r_idx, column=15).value = None
                         else:
-                            # Clear cells/placeholders
-                            ws_work.cell(row=r_idx, column=15).value = None
-                            cell_s = ws_work.cell(row=r_idx, column=19)
-                            if type(cell_s).__name__ != "MergedCell":
-                                cell_s.value = None
+                            ws_work.cell(row=r_idx, column=15).value = reason_val
+                            cell_s.value = remark_val
+
+            # Get shift details from Production_Loss table if available
+            db_shift = "G"
+            db_shift_start = 8.30
+            db_shift_end = 17.30
+            db_shift_time = 540
+            db_break_time = 40
+            db_line_pause = 10
+            
+            if daily_prod_loss:
+                # Use the first shift record found for the day
+                first_shift = daily_prod_loss[0]
+                db_shift = first_shift[0].strip() if first_shift[0] is not None else "G"
+                db_shift_start = float(first_shift[1]) if first_shift[1] is not None else 8.30
+                db_shift_end = float(first_shift[2]) if first_shift[2] is not None else 17.30
+                db_shift_time = int(first_shift[5]) if first_shift[5] is not None else 540
+                db_break_time = int(first_shift[6]) if first_shift[6] is not None else 40
+                db_line_pause = int(first_shift[7]) if first_shift[7] is not None else 10
+
+            # Populate Chassis Line Status table
+            if chassis_line_status:
+                for sname in ["SQL Work", "PLC Work"]:
+                    if sname in wb.sheetnames:
+                        ws_work = wb[sname]
+                        for idx, row in enumerate(chassis_line_status):
+                            r_idx = 32 + idx
+                            
+                            # A: Shift
+                            ws_work.cell(row=r_idx, column=1).value = db_shift
+                            
+                            # B: Shift Start Time
+                            ws_work.cell(row=r_idx, column=2).value = db_shift_start
+                            
+                            # C: Shift End Time
+                            ws_work.cell(row=r_idx, column=3).value = db_shift_end
+                            
+                            # E: Shift Time (Min)
+                            ws_work.cell(row=r_idx, column=5).value = f"={db_shift_time}-{db_break_time}-F{r_idx}"
+                            
+                            # F: Plan Down Time (Min)
+                            ws_work.cell(row=r_idx, column=6).value = db_line_pause
+                            
+                            # G: Production Count
+                            ws_work.cell(row=r_idx, column=7).value = row[7] # RecordCount
+                            
+                            # H: Production Loss (Min)
+                            ws_work.cell(row=r_idx, column=8).value = f"=I{r_idx}+J{r_idx}+K{r_idx}+M{r_idx}+O{r_idx}"
+                            
+                            # I: Call Loss Process (Min)
+                            ws_work.cell(row=r_idx, column=9).value = to_mins(row[1])
+                            
+                            # J: Call Loss Material (Min)
+                            ws_work.cell(row=r_idx, column=10).value = to_mins(row[2])
+                            
+                            # K: Call Loss Quality (Min)
+                            ws_work.cell(row=r_idx, column=11).value = to_mins(row[3])
+                            
+                            # M: Call Loss Maint (Min)
+                            ws_work.cell(row=r_idx, column=13).value = to_mins(row[4])
+                            
+                            # O: Call Loss Other (Min)
+                            ws_work.cell(row=r_idx, column=15).value = to_mins(row[5])
+                            
+                            # Q: Call Loss Remark
+                            ws_work.cell(row=r_idx, column=17).value = row[8] # Remark
+                            
+                            # T: Station Availability (%)
+                            ws_work.cell(row=r_idx, column=20).value = f"=IF(E{r_idx}>0, ROUND((E{r_idx}-H{r_idx})/E{r_idx}*100, 0), 100)"
+
+            # Write formulas for daily minutes lost in SQL Work and PLC Work
+            for ct in call_types:
+                r_idx = call_type_rows[ct]
+                r_stop = 5 + call_types.index(ct)
+                
+                # SQL Work formulas
+                if "SQL Work" in wb.sheetnames:
+                    ws_work = wb["SQL Work"]
+                    ws_work.cell(row=r_idx, column=5).value = f"='Line Stop_Prod Loss'!G{r_stop}"
+                    ws_work.cell(row=r_idx, column=6).value = f"='Line Stop_Prod Loss'!H{r_stop}"
+                    ws_work.cell(row=r_idx, column=7).value = f"='Line Stop_Prod Loss'!F{r_stop}"
+                    ws_work.cell(row=r_idx, column=8).value = f"='Line Stop_Prod Loss'!E{r_stop}"
+                    ws_work.cell(row=r_idx, column=9).value = f"='Line Stop_Prod Loss'!D{r_stop}"
+                    ws_work.cell(row=r_idx, column=10).value = f"='Line Stop_Prod Loss'!C{r_stop}"
+                    ws_work.cell(row=r_idx, column=11).value = 0
+                    ws_work.cell(row=r_idx, column=13).value = 0
+                
+                # PLC Work formulas
+                if "PLC Work" in wb.sheetnames:
+                    ws_work = wb["PLC Work"]
+                    ws_work.cell(row=r_idx, column=5).value = f"='Line Stop_Prod Loss'!H{r_stop}"
+                    if ct != "Process Call":
+                        ws_work.cell(row=r_idx, column=6).value = f"='Line Stop_Prod Loss'!G{r_stop}"
+                    ws_work.cell(row=r_idx, column=7).value = f"='Line Stop_Prod Loss'!F{r_stop}"
+                    ws_work.cell(row=r_idx, column=8).value = f"='Line Stop_Prod Loss'!E{r_stop}"
+                    ws_work.cell(row=r_idx, column=9).value = f"='Line Stop_Prod Loss'!D{r_stop}"
+                    ws_work.cell(row=r_idx, column=10).value = f"='Line Stop_Prod Loss'!C{r_stop}"
+                    ws_work.cell(row=r_idx, column=11).value = 0
+                    ws_work.cell(row=r_idx, column=13).value = 0
 
         # 7. Save and return workbook
         wb.save(output_path)
