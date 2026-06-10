@@ -14,10 +14,10 @@ def main():
     # Mock payload for report generation
     # Today is June 9, 2026. The FY is April 1, 2026 to March 31, 2027.
     payload = MgmtProdReportRequest(
-        ReportDate="2026-06-09",
+        ReportDate="2026-05-26",
         StartDate="2026-04-01",
         LastDate="2027-03-31",
-        Shift="All"
+        Shift="A"
     )
     
     gen = get_db_connection()
@@ -31,30 +31,25 @@ def main():
         # Open and inspect the generated Excel sheet
         import openpyxl
         fpath = result["filepath"]
-        wb = openpyxl.load_workbook(fpath)
+        wb = openpyxl.load_workbook(fpath, data_only=False)
         
-        print("\n--- Inspecting SQL Work ---")
-        ws_sql = wb["SQL Work"]
-        print("C15:", ws_sql.cell(row=15, column=3).value)
-        print("C17 (Saarthi Chassis):", ws_sql.cell(row=17, column=3).value)
-        print("C18 (Saarthi BIW):", ws_sql.cell(row=18, column=3).value)
-        print("D17 (Micky Chassis):", ws_sql.cell(row=17, column=4).value)
-        print("D18 (Micky BIW):", ws_sql.cell(row=18, column=4).value)
+        print("\n--- Inspecting Manag Report ---")
+        ws_man = wb["Manag Report"]
+        print("Row 34 (Chassis Production Daily):")
+        print("Shift (D34):", ws_man["D34"].value)
+        print("Shift Start Time (E34):", ws_man["E34"].value)
+        print("Shift End Time (F34):", ws_man["F34"].value)
+        print("Shift Time (G34):", ws_man["G34"].value)
+        print("Plan Down Time (H34):", ws_man["H34"].value)
+        print("Production Count (I34):", ws_man["I34"].value)
+        print("Station Availability Formula (J34):", ws_man["J34"].value)
         
-        print("\n--- Inspecting PLC Work ---")
-        ws_plc = wb["PLC Work"]
-        print("C15:", ws_plc.cell(row=15, column=3).value)
-        print("C17:", ws_plc.cell(row=17, column=3).value)
-        print("C18:", ws_plc.cell(row=18, column=3).value)
-        print("D17:", ws_plc.cell(row=17, column=4).value)
-        print("D18:", ws_plc.cell(row=18, column=4).value)
+        print("\n--- Inspecting Chassis Line Status (CH-10 to CH-60) ---")
+        for r in range(38, 44):
+            vals = [ws_man.cell(row=r, column=c).value for c in range(1, 9)]
+            print(f"Row {r}: {vals}")
 
-        print("\n--- Inspecting PrevFY ---")
-        ws_prev = wb["PrevFY"]
-        print("Row 3 (M_TCF):", [ws_prev.cell(row=3, column=c).value for c in range(1, 10)])
-        print("Row 12 (S_TCF):", [ws_prev.cell(row=12, column=c).value for c in range(1, 10)])
-        print("Row 22 (M_BIW):", [ws_prev.cell(row=22, column=c).value for c in range(1, 10)])
-        print("Row 32 (S_BIW):", [ws_prev.cell(row=32, column=c).value for c in range(1, 10)])
+        # Also print data_only=True to evaluate J34 if possible (though openpyxl does not evaluate formulas dynamically)
         
     except Exception as err:
         print("Error occurred:", err)

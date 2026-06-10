@@ -72,29 +72,12 @@ def generate_mgmt_production_report(
         # 3. Run main SQL query for Micky
         cursor.execute(SaarthiMickyReportTCFBIW(payload.ReportDate, payload.StartDate, payload.LastDate, payload.Shift,"S_TCF"))
         rows = cursor.fetchall()
-        columns = [col[0] for col in cursor.description]
-        print("--- Saarthi S_TCF Row Details ---")
-        for row in rows:
-            for col_name, val in zip(columns, row):
-                print(f"{col_name} : {val}")
 
         cursor.execute(SaarthiMickyReportTCFBIW(payload.ReportDate, payload.StartDate, payload.LastDate, payload.Shift,"M_TCF"))
         rows1 = cursor.fetchall()
-        columns = [col[0] for col in cursor.description]
-        print("--- M_TCF Row Details ---")
-        for row in rows1:
-            for col_name, val in zip(columns, row):
-                print(f"{col_name} : {val}")
-
 
         cursor.execute(SaarthiMickyReportTCFBIW(payload.ReportDate, payload.StartDate, payload.LastDate, payload.Shift,"S_BIW"))
         rows2 = cursor.fetchall()
-
-        columns = [col[0] for col in cursor.description]
-        print("--- S_BIW Row Details ---")
-        for row in rows2:
-            for col_name, val in zip(columns, row):
-                print(f"{col_name} : {val}")
 
         cursor.execute(SaarthiMickyReportTCFBIW(payload.ReportDate, payload.StartDate, payload.LastDate, payload.Shift,"M_BIW"))
         rows3 = cursor.fetchall()
@@ -102,6 +85,12 @@ def generate_mgmt_production_report(
         # 4. Run line stop queries (Daily & Monthly) and Production Loss query
         cursor.execute(LineStopRecordDaily(payload.ReportDate))
         daily_line_stops = cursor.fetchall()
+
+        columns = [col[0] for col in cursor.description]
+        print("--- Daily Line Stop Row Details ---")
+        for row in daily_line_stops:
+            for col_name, val in zip(columns, row):
+                print(f"{col_name} : {val}")
 
         cursor.execute(LineStopRecordMonthly(payload.ReportDate))
         monthly_line_stops = cursor.fetchall()
@@ -111,10 +100,6 @@ def generate_mgmt_production_report(
 
         cursor.execute(ChassisLineStatus(payload.ReportDate, payload.Shift))
         chassis_line_status = cursor.fetchall()
-        
-        cursor.close()
-
-
         # 6. Load Excel template and populate sheets
         wb = openpyxl.load_workbook(TEMPLATE_PATH)
 
@@ -147,6 +132,16 @@ def generate_mgmt_production_report(
                 cell_n15 = ws.cell(row=15, column=14)
                 cell_n15.number_format = '@'
                 cell_n15.value = report_date.strftime("%d-%b-%Y")
+
+                # Update N23 (Daily: DD-Short month name-YYYY, e.g. 07-Jun-2026)
+                cell_n23 = ws.cell(row=15, column=14)
+                cell_n23.number_format = '@'
+                cell_n23.value = report_date.strftime("%d-%b-%Y")
+
+                # Update E45 (Daily: DD-Short month name-YYYY, e.g. 07-Jun-2026)
+                cell_E45 = ws.cell(row=45, column=5)
+                cell_E45.number_format = '@'
+                cell_E45.value = report_date.strftime("%d-%b-%Y")
                 
                 # Update Q9 (MTD: DD-Short month name, e.g. 07-Jun)
                 cell_q9 = ws.cell(row=9, column=17)
@@ -159,9 +154,11 @@ def generate_mgmt_production_report(
                 cell_u4.value = report_date.strftime("%b %Y")
 
                 # Update U5 (Available Working Days)
-                total_days = rows[0][21]      # महिन्याचे एकूण दिवस
+
+                today = date.today()
+                days_in_month = calendar.monthrange(today.year, today.month)[1]
                 today_day = int(report_date.strftime("%d"))  # आजची तारीख
-                remaining_days = total_days - today_day - 4  # 4 सुट्ट्या वजा
+                remaining_days = days_in_month - today_day - 4  # 4 सुट्ट्या वजा
                 cell_u5 = ws.cell(row=5, column=21)
                 cell_u5.number_format = '@'
                 cell_u5.value = remaining_days
@@ -517,7 +514,231 @@ def generate_mgmt_production_report(
                 cell_D18 = ws.cell(row=18, column=4)
                 cell_D18.number_format = '@'
                 cell_D18.value = safe_int(rows3[0][16])
-                
+
+                # A. Populate Line Stop Daily & Monthly in 'Line Stop_Prod Loss' sheet
+                if "Line Stop_Prod Loss" in wb.sheetnames:
+                    ws_ls = wb["Line Stop_Prod Loss"]
+                    
+                    # 1. Daily line stops mapping
+                    daily_row_mapping = {
+                        "Process Call": 5,
+                        "Material Call": 6,
+                        "Quality Call": 7,
+                        "Maintenance Call": 8,
+                        "Other": 9
+                    }
+                    
+                    for row in daily_line_stops:
+                        type_of_call = row[0]
+                        r = daily_row_mapping.get(type_of_call)
+                        if r:
+                            # SQL columns: TypeOfCallText, Chassis, Trim, Saarthi Main, Saarthi Sub, I-PUMA Main, I-PUMA Sub, Cargo Main, Cargo Sub, Chassis Line Loss Reason, Remark
+                            # Map to Line Stop_Prod Loss sheet columns:
+                            # Col C (3): I-PUMA Sub (row[6])
+                            # Col D (4): I-PUMA Main (row[5])
+                            # Col E (5): Saarthi Sub (row[4])
+                            # Col F (6): Saarthi Main (row[3])
+                            # Col G (7): Chassis (row[1])
+                            # Col H (8): Trim (row[2])
+                            val_ipuma_sub = to_mins(row[6])
+                            val_ipuma_main = to_mins(row[5])
+                            val_saarthi_sub = to_mins(row[4])
+                            val_saarthi_main = to_mins(row[3])
+                            val_chassis = to_mins(row[1])
+                            val_trim = to_mins(row[2])
+                            val_total = val_ipuma_sub + val_ipuma_main + val_saarthi_sub + val_saarthi_main + val_chassis + val_trim
+                            
+                            ws_ls.cell(row=r, column=3).value = val_ipuma_sub
+                            ws_ls.cell(row=r, column=4).value = val_ipuma_main
+                            ws_ls.cell(row=r, column=5).value = val_saarthi_sub
+                            ws_ls.cell(row=r, column=6).value = val_saarthi_main
+                            ws_ls.cell(row=r, column=7).value = val_chassis
+                            ws_ls.cell(row=r, column=8).value = val_trim
+                            ws_ls.cell(row=r, column=9).value = val_total
+                            
+                            # Chassis Line Loss Reason (Col N / 14)
+                            ws_ls.cell(row=r, column=14).value = row[9]
+                            
+                    # 2. Monthly line stops mapping
+                    # First aggregate raw records
+                    def get_station_group(station_no):
+                        if station_no is None:
+                            return None
+                        try:
+                            s = int(station_no)
+                        except ValueError:
+                            return None
+                        if 31 <= s <= 36:
+                            return "Chassis"
+                        elif 25 <= s <= 30:
+                            return "Trim"
+                        elif 18 <= s <= 24:
+                            return "Saarthi Main"
+                        elif 14 <= s <= 17:
+                            return "Saarthi Sub"
+                        elif 5 <= s <= 13:
+                            return "I-PUMA Main"
+                        elif 1 <= s <= 4:
+                            return "I-PUMA Sub"
+                        return None
+
+                    monthly_data = {
+                        cat: {
+                            "Chassis": 0.0,
+                            "Trim": 0.0,
+                            "Saarthi Main": 0.0,
+                            "Saarthi Sub": 0.0,
+                            "I-PUMA Main": 0.0,
+                            "I-PUMA Sub": 0.0,
+                            "reasons": {
+                                "Chassis": {},
+                                "Trim": {},
+                                "Saarthi Main": {},
+                                "Saarthi Sub": {},
+                                "I-PUMA Main": {},
+                                "I-PUMA Sub": {}
+                            }
+                        } for cat in ["Process Call", "Material Call", "Quality Call", "Maintenance Call", "Other"]
+                    }
+
+                    for row in monthly_line_stops:
+                        # SQL monthly row columns: DT, LineStopTime, TypeOfCall, TypeOfCallText, ReasonCode, ReasonText, StationNo
+                        loss_time = float(row[1]) if row[1] is not None else 0.0
+                        type_of_call = row[3]
+                        reason = row[5]
+                        station_no = row[6]
+                        group = get_station_group(station_no)
+                        
+                        if type_of_call not in monthly_data:
+                            type_of_call = "Other"
+                        
+                        if group is not None:
+                            monthly_data[type_of_call][group] += loss_time
+                            if reason is not None and str(reason).strip() not in ('', '0', 'null'):
+                                r_dict = monthly_data[type_of_call]["reasons"][group]
+                                r_dict[reason] = r_dict.get(reason, 0.0) + loss_time
+
+                    monthly_row_mapping = {
+                        "Process Call": 24,
+                        "Material Call": 25,
+                        "Quality Call": 26,
+                        "Maintenance Call": 27,
+                        "Other": 28
+                    }
+
+                    for cat, r in monthly_row_mapping.items():
+                        val_ipuma_sub = to_mins(monthly_data[cat]["I-PUMA Sub"])
+                        val_ipuma_main = to_mins(monthly_data[cat]["I-PUMA Main"])
+                        val_saarthi_sub = to_mins(monthly_data[cat]["Saarthi Sub"])
+                        val_saarthi_main = to_mins(monthly_data[cat]["Saarthi Main"])
+                        val_chassis = to_mins(monthly_data[cat]["Chassis"])
+                        val_trim = to_mins(monthly_data[cat]["Trim"])
+                        val_total = val_ipuma_sub + val_ipuma_main + val_saarthi_sub + val_saarthi_main + val_chassis + val_trim
+                        
+                        ws_ls.cell(row=r, column=3).value = val_ipuma_sub
+                        ws_ls.cell(row=r, column=4).value = val_ipuma_main
+                        ws_ls.cell(row=r, column=5).value = val_saarthi_sub
+                        ws_ls.cell(row=r, column=6).value = val_saarthi_main
+                        ws_ls.cell(row=r, column=7).value = val_chassis
+                        ws_ls.cell(row=r, column=8).value = val_trim
+                        ws_ls.cell(row=r, column=9).value = val_total
+
+                        # Write top reasons
+                        # Map station groups to column indices in sheet:
+                        # I-PUMA Sub -> J (10)
+                        # I-PUMA Main -> K (11)
+                        # Saarthi Sub -> L (12)
+                        # Saarthi Main -> M (13)
+                        # Chassis -> N (14)
+                        # Trim -> O (15)
+                        top_reason_col_mapping = {
+                            "I-PUMA Sub": 10,
+                            "I-PUMA Main": 11,
+                            "Saarthi Sub": 12,
+                            "Saarthi Main": 13,
+                            "Chassis": 14,
+                            "Trim": 15
+                        }
+                        for group, col_idx in top_reason_col_mapping.items():
+                            reasons_dict = monthly_data[cat]["reasons"][group]
+                            if reasons_dict:
+                                top_reason = max(reasons_dict, key=reasons_dict.get)
+                                ws_ls.cell(row=r, column=col_idx).value = top_reason
+                            else:
+                                ws_ls.cell(row=r, column=col_idx).value = None
+
+                # B. Populate Cargo Main/Sub, Chassis Line Loss Reason and Remarks in 'Manag Report' sheet
+                if "Manag Report" in wb.sheetnames:
+                    ws_man = wb["Manag Report"]
+                    
+                    # Map Cargo Main/Sub and Chassis details for Daily section in Manag Report (rows 48-52)
+                    man_row_mapping = {
+                        "Process Call": 48,
+                        "Material Call": 49,
+                        "Quality Call": 50,
+                        "Maintenance Call": 51,
+                        "Other": 52
+                    }
+                    
+                    for row in daily_line_stops:
+                        type_of_call = row[0]
+                        r = man_row_mapping.get(type_of_call)
+                        if r:
+                            # Col 11 (K): Cargo Main (row[7])
+                            ws_man.cell(row=r, column=11).value = to_mins(row[7])
+                            # Col 13 (M): Cargo Sub (row[8])
+                            ws_man.cell(row=r, column=13).value = to_mins(row[8])
+                            # Col 15 (O): Chassis Line Loss Reason (row[9])
+                            ws_man.cell(row=r, column=15).value = row[9]
+                            # Col 19 (S): Remark (row[10])
+                            ws_man.cell(row=r, column=19).value = row[10]
+
+                    # C. Populate Chassis Line Status & Chassis Production Daily in 'Manag Report' sheet
+                    if chassis_line_status:
+                        # 1. Update row 34: Chassis Production Daily
+                        first_row = chassis_line_status[0]
+                        # Col D (4): Shift
+                        ws_man.cell(row=34, column=4).value = first_row[9]
+                        # Col E (5): Shift Start Time
+                        ws_man.cell(row=34, column=5).value = first_row[10]
+                        # Col F (6): Shift End Time
+                        ws_man.cell(row=34, column=6).value = first_row[11]
+                        # Col G (7): Shift Time (Min)
+                        ws_man.cell(row=34, column=7).value = safe_int(first_row[14])
+                        # Col H (8): Plan Down Time (Min) (DownTime)
+                        ws_man.cell(row=34, column=8).value = safe_int(first_row[17])
+                        # Col I (9): Production Count
+                        ws_man.cell(row=34, column=9).value = safe_int(first_row[12])
+                        # Col J (10): Fix the broken formula in J34 (Station Availability %)
+                        ws_man.cell(row=34, column=10).value = "=IF(G34>0, ROUND((G34-H34)/G34*100, 0), 0)"
+
+                        # 2. Update rows 38-43: Chassis Line Status table
+                        station_row_mapping = {
+                            "CH-10": 38,
+                            "CH-20": 39,
+                            "CH-30": 40,
+                            "CH-40": 41,
+                            "CH-50": 42,
+                            "CH-60": 43
+                        }
+                        for row in chassis_line_status:
+                            station_num = row[0]
+                            r = station_row_mapping.get(station_num)
+                            if r:
+                                # Col B (2): Production Loss (Min) -> TotalLoss
+                                ws_man.cell(row=r, column=2).value = to_mins(row[6])
+                                # Col C (3): Call Loss Process (Min)
+                                ws_man.cell(row=r, column=3).value = to_mins(row[1])
+                                # Col D (4): Call Loss Material (Min)
+                                ws_man.cell(row=r, column=4).value = to_mins(row[2])
+                                # Col E (5): Call Loss Quality (Min)
+                                ws_man.cell(row=r, column=5).value = to_mins(row[3])
+                                # Col F (6): Call Loss Maint (Min)
+                                ws_man.cell(row=r, column=6).value = to_mins(row[4])
+                                # Col G (7): Call Loss Other (Min)
+                                ws_man.cell(row=r, column=7).value = to_mins(row[5])
+                                # Col H (8): Call Loss Remark
+                                ws_man.cell(row=r, column=8).value = row[8]
 
             
         # 7. Save and return workbook

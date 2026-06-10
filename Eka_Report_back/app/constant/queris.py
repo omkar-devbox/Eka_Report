@@ -1,26 +1,4 @@
 def SaarthiMickyReportTCFBIW(ReportDate, StartDate, LastDate, Shift="All",DbName="") -> str:
-    shift_filter = ""
-    if Shift != "All":
-        shift_filter = f"AND LTRIM(RTRIM(LD.Shift)) = '{Shift}'"
-    else:
-        shift_filter = f"""AND
-      (
-            LD.Shift IS NOT NULL
-
-            OR
-
-            (
-                LD.Shift IS NULL
-                AND NOT EXISTS
-                (
-                    SELECT 1
-                    FROM dbo.{DbName} T
-                    WHERE CAST(T.DT AS DATE) = LD.ReportDate
-                      AND T.Shift IS NOT NULL
-                )
-            )
-      )"""
-
     return f""" 
 DECLARE @ReportDate DATE = '{ReportDate}';
 DECLARE @StartDate  DATE = '{StartDate}';
@@ -33,14 +11,12 @@ WITH LatestData AS
     SELECT
         DT,
         CAST(DT AS DATE) AS ReportDate,
-        Shift,
         TARGET,
         ACTUAL,
         ROW_NUMBER() OVER
         (
             PARTITION BY
-                CAST(DT AS DATE),
-                ISNULL(CAST(Shift AS VARCHAR(50)), 'NO_SHIFT')
+                CAST(DT AS DATE)
             ORDER BY DT DESC
         ) AS RN
     FROM dbo.{DbName}
@@ -50,12 +26,10 @@ FinalData AS
     SELECT
         LD.DT,
         LD.ReportDate,
-        LD.Shift,
         LD.TARGET,
         LD.ACTUAL
     FROM LatestData LD
     WHERE LD.RN = 1
-      {shift_filter}
 ),
 MonthData AS
 (
@@ -203,28 +177,6 @@ FROM MonthData;
 
 
 def SaarthiMickyReportTCFBIW1(ReportDate, StartDate, LastDate, Shift="All",DbName="") -> str:
-    shift_filter = ""
-    if Shift != "All":
-        shift_filter = f"AND LTRIM(RTRIM(LD.Shift)) = '{Shift}'"
-    else:
-        shift_filter = f"""AND
-      (
-            LD.Shift IS NOT NULL
-
-            OR
-
-            (
-                LD.Shift IS NULL
-                AND NOT EXISTS
-                (
-                    SELECT 1
-                    FROM dbo.{DbName} T
-                    WHERE CAST(T.DT AS DATE) = LD.ReportDate
-                      AND T.Shift IS NOT NULL
-                )
-            )
-      )"""
-
     return f""" 
 DECLARE @ReportDate DATE = '{ReportDate}';
 DECLARE @StartDate  DATE = '{StartDate}';
@@ -237,14 +189,12 @@ WITH LatestData AS
     SELECT
         DT,
         CAST(DT AS DATE) AS ReportDate,
-        Shift,
         TARGET,
         ACTUAL,
         ROW_NUMBER() OVER
         (
             PARTITION BY
-                CAST(DT AS DATE),
-                ISNULL(CAST(Shift AS VARCHAR(50)), 'NO_SHIFT')
+                CAST(DT AS DATE)
             ORDER BY DT DESC
         ) AS RN
     FROM dbo.{DbName}
@@ -254,12 +204,10 @@ FinalData AS
     SELECT
         LD.DT,
         LD.ReportDate,
-        LD.Shift,
         LD.TARGET,
         LD.ACTUAL
     FROM LatestData LD
     WHERE LD.RN = 1
-      {shift_filter}
 ),
 MonthData AS
 (
@@ -707,6 +655,30 @@ def ProductionLossDaily(ReportDate, Shift="All") -> str:
     if Shift != "All":
         shift_cond = f"AND LTRIM(RTRIM(Shift)) = '{Shift}'"
     return f"""
+WITH LatestLoss AS
+(
+    SELECT
+        Shift,
+        ShiftStart,
+        ShiftEnd,
+        ProdCount,
+        ProdLoss,
+        ShiftTime,
+        BreakTime,
+        LinePause,
+        DownTime,
+        ShiftWorkingTime,
+        OEE,
+        DT,
+        ROW_NUMBER() OVER
+        (
+            PARTITION BY
+                LTRIM(RTRIM(Shift))
+            ORDER BY DT DESC
+        ) AS RN
+    FROM dbo.Production_Loss
+    WHERE CAST(DT AS DATE) = '{ReportDate}' {shift_cond}
+)
 SELECT
     Shift,
     ShiftStart,
@@ -720,15 +692,15 @@ SELECT
     ShiftWorkingTime,
     OEE,
     DT
-FROM dbo.Production_Loss
-WHERE CAST(DT AS DATE) = '{ReportDate}' {shift_cond}
+FROM LatestLoss
+WHERE RN = 1
 ORDER BY Shift ASC;
 """
 
 def ChassisLineStatus(ReportDate, Shift="All") -> str:
     PL_ShiftFilter = ""
     if Shift != "All":
-        PL_ShiftFilter = f"AND PL.Shift = '{Shift}'"
+        PL_ShiftFilter = f"AND Shift = '{Shift}'"
 
     return f"""
 WITH CH_All AS
