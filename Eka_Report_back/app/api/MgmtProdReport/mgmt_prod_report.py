@@ -46,6 +46,19 @@ def generate_mgmt_production_report(
         mins = float(seconds) / 60.0 if seconds is not None else 0.0
         return int(mins) if mins % 1 == 0 else round(mins, 1)
 
+    def to_hours(seconds):
+        if seconds is None:
+            return 0.0
+        try:
+            val = float(seconds)
+            if val <= 24:
+                return val
+            hours = int(val // 3600)
+            minutes = int((val % 3600) // 60)
+            return round(hours + minutes / 100.0, 2)
+        except (ValueError, TypeError):
+            return 0.0
+
     try:
         # 1. Parse and validate dates
         try:
@@ -108,11 +121,12 @@ def generate_mgmt_production_report(
   
 
         # G. Update Date & Time and date formatting in summary sheets
+        current_date = datetime.date.today()
         current_time = datetime.datetime.now().time()
         for sname in ["Manag Report", "PLC Work"]:
             if sname in wb.sheetnames:
                 ws = wb[sname]
-                ws.cell(row=4, column=2).value = report_date.strftime("%d-%m-%Y")
+                ws.cell(row=4, column=2).value = current_date.strftime("%d-%m-%Y")
                 ws.cell(row=5, column=2).value = current_time
                 
                 # Update E9 (Monthly: Short month name - YYYY, e.g. Jan 2026)
@@ -135,6 +149,12 @@ def generate_mgmt_production_report(
                 cell_n15.number_format = '@'
                 cell_n15.value = report_date.strftime("%d-%b-%Y")
 
+
+                # Update N23 (Daily: DD-Short month name-YYYY, e.g. 07-Jun-2026)
+                cell_N23 = ws.cell(row=23, column=14)
+                cell_N23.number_format = '@'
+                cell_N23.value = report_date.strftime("%d-%b-%Y")
+
                 # Update N23 (Daily: DD-Short month name-YYYY, e.g. 07-Jun-2026)
                 cell_n23 = ws.cell(row=15, column=14)
                 cell_n23.number_format = '@'
@@ -156,14 +176,18 @@ def generate_mgmt_production_report(
                 cell_u4.value = report_date.strftime("%b %Y")
 
                 # Update U5 (Available Working Days)
-
-                today = date.today()
-                days_in_month = calendar.monthrange(today.year, today.month)[1]
-                today_day = int(report_date.strftime("%d"))  # आजची तारीख
-                remaining_days = days_in_month - today_day - 4  # 4 सुट्ट्या वजा
+                days_in_month = calendar.monthrange(report_date.year, report_date.month)[1]
+                remaining_days = days_in_month - 4  # 4 सुट्ट्या वजा
                 cell_u5 = ws.cell(row=5, column=21)
                 cell_u5.number_format = '@'
                 cell_u5.value = remaining_days
+
+                # Update U6 (Available Working Days)
+                today_day = report_date.day  # आजची तारीख
+                remaining_days = max(0, days_in_month - today_day - 4)  # 4 सुट्ट्या वजा
+                cell_u6 = ws.cell(row=6, column=21)
+                cell_u6.number_format = '@'
+                cell_u6.value = remaining_days
 
                 # Update C15 (Show Fy YY YY - Prev Year)
                 cell_c15 = ws.cell(row=15, column=3)
@@ -702,17 +726,20 @@ def generate_mgmt_production_report(
                         # Col D (4): Shift
                         ws_man.cell(row=34, column=4).value = first_row[9]
                         # Col E (5): Shift Start Time
-                        ws_man.cell(row=34, column=5).value = first_row[10]
+                        ws_man.cell(row=34, column=5).value = to_hours(first_row[10])
                         # Col F (6): Shift End Time
-                        ws_man.cell(row=34, column=6).value = first_row[11]
+                        ws_man.cell(row=34, column=6).value = to_hours(first_row[11])
                         # Col G (7): Shift Time (Min)
                         ws_man.cell(row=34, column=7).value = safe_int(first_row[14])
                         # Col H (8): Plan Down Time (Min) (DownTime)
                         ws_man.cell(row=34, column=8).value = safe_int(first_row[17])
                         # Col I (9): Production Count
                         ws_man.cell(row=34, column=9).value = safe_int(first_row[12])
-                        # Col J (10): Fix the broken formula in J34 (Station Availability %)
-                        ws_man.cell(row=34, column=10).value = "=IF(G34>0, ROUND((G34-H34)/G34*100, 0), 0)"
+                        # Col J (10): OEE from database, formatted as 4 decimal places
+                        oee_val = first_row[19]
+                        cell_J34 = ws_man.cell(row=34, column=10)
+                        cell_J34.number_format = '0.0000'
+                        cell_J34.value = round(float(oee_val), 4) if oee_val is not None else 0.0
 
                         # 2. Update rows 38-43: Chassis Line Status table
                         station_row_mapping = {

@@ -93,23 +93,23 @@ SELECT
     -- Weekly
    -- Weekly
 SUM(CASE WHEN WeekNo = 1 THEN TARGET ELSE 0 END) AS W1_TARGET,
-SUM(CASE WHEN WeekNo = 1 THEN ACTUAL ELSE 0 END) AS W1_ACTUAL,
+SUM(CASE WHEN WeekNo = 1 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W1_ACTUAL,
 
 SUM(CASE WHEN WeekNo = 2 THEN TARGET ELSE 0 END) AS W2_TARGET,
-SUM(CASE WHEN WeekNo = 2 THEN ACTUAL ELSE 0 END) AS W2_ACTUAL,
+SUM(CASE WHEN WeekNo = 2 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W2_ACTUAL,
 
 SUM(CASE WHEN WeekNo = 3 THEN TARGET ELSE 0 END) AS W3_TARGET,
-SUM(CASE WHEN WeekNo = 3 THEN ACTUAL ELSE 0 END) AS W3_ACTUAL,
+SUM(CASE WHEN WeekNo = 3 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W3_ACTUAL,
 
 SUM(CASE WHEN WeekNo = 4 THEN TARGET ELSE 0 END) AS W4_TARGET,
-SUM(CASE WHEN WeekNo = 4 THEN ACTUAL ELSE 0 END) AS W4_ACTUAL,
+SUM(CASE WHEN WeekNo = 4 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W4_ACTUAL,
 
 SUM(CASE WHEN WeekNo >= 5 THEN TARGET ELSE 0 END) AS W5_TARGET,
-SUM(CASE WHEN WeekNo >= 5 THEN ACTUAL ELSE 0 END) AS W5_ACTUAL,
+SUM(CASE WHEN WeekNo >= 5 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W5_ACTUAL,
 
     -- Monthly
     SUM(TARGET) AS MONTHLY_TARGET,
-    SUM(ACTUAL) AS MONTHLY_ACTUAL,
+    SUM(CASE WHEN ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS MONTHLY_ACTUAL,
 
     -- Previous Financial Year
     (
@@ -258,23 +258,23 @@ SELECT
 
     -- Weekly
     SUM(CASE WHEN WeekNo = 1 THEN TARGET ELSE 0 END) AS W1_TARGET,
-    SUM(CASE WHEN WeekNo = 1 THEN ACTUAL ELSE 0 END) AS W1_ACTUAL,
+    SUM(CASE WHEN WeekNo = 1 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W1_ACTUAL,
 
     SUM(CASE WHEN WeekNo = 2 THEN TARGET ELSE 0 END) AS W2_TARGET,
-    SUM(CASE WHEN WeekNo = 2 THEN ACTUAL ELSE 0 END) AS W2_ACTUAL,
+    SUM(CASE WHEN WeekNo = 2 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W2_ACTUAL,
 
     SUM(CASE WHEN WeekNo = 3 THEN TARGET ELSE 0 END) AS W3_TARGET,
-    SUM(CASE WHEN WeekNo = 3 THEN ACTUAL ELSE 0 END) AS W3_ACTUAL,
+    SUM(CASE WHEN WeekNo = 3 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W3_ACTUAL,
 
     SUM(CASE WHEN WeekNo = 4 THEN TARGET ELSE 0 END) AS W4_TARGET,
-    SUM(CASE WHEN WeekNo = 4 THEN ACTUAL ELSE 0 END) AS W4_ACTUAL,
+    SUM(CASE WHEN WeekNo = 4 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W4_ACTUAL,
 
     SUM(CASE WHEN WeekNo >= 5 THEN TARGET ELSE 0 END) AS W5_TARGET,
-    SUM(CASE WHEN WeekNo >= 5 THEN ACTUAL ELSE 0 END) AS W5_ACTUAL,
+    SUM(CASE WHEN WeekNo >= 5 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W5_ACTUAL,
 
     -- Monthly
     SUM(TARGET) AS MONTHLY_TARGET,
-    SUM(ACTUAL) AS MONTHLY_ACTUAL,
+    SUM(CASE WHEN ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS MONTHLY_ACTUAL,
 
     -- Previous Financial Year
     (
@@ -326,6 +326,79 @@ SELECT
     -- Auto Detect Month Days (28/29/30/31)
     DAY(EOMONTH(@ReportDate)) AS DAYS_IN_MONTH
 FROM MonthData;
+"""
+
+
+def SaarthiMickyWeekwiseMonthly(ReportDate, Shift="All", DbName="") -> str:
+    """
+    Fetches production data aggregated by ISO calendar week for a given month of ReportDate.
+    Result columns: ISOWeek, WK_TARGET, WK_ACTUAL.
+    """
+    shift_filter = ""
+    if Shift != "All":
+        shift_filter = f"AND LTRIM(RTRIM(LD.Shift)) = '{Shift}'"
+    else:
+        shift_filter = f"""AND
+      (
+            LD.Shift IS NOT NULL
+
+            OR
+
+            (
+                LD.Shift IS NULL
+                AND NOT EXISTS
+                (
+                    SELECT 1
+                    FROM dbo.{DbName} T
+                    WHERE CAST(T.DT AS DATE) = LD.ReportDate
+                      AND T.Shift IS NOT NULL
+                )
+            )
+      )"""
+
+    return f"""
+DECLARE @ReportDate DATE = '{ReportDate}';
+
+SET DATEFIRST 1; -- Monday (ISO 8601 week start)
+
+WITH LatestData AS
+(
+    SELECT
+        DT,
+        CAST(DT AS DATE) AS ReportDate,
+        Shift,
+        TARGET,
+        ACTUAL,
+        ROW_NUMBER() OVER
+        (
+            PARTITION BY
+                CAST(DT AS DATE),
+                ISNULL(CAST(Shift AS VARCHAR(50)), 'NO_SHIFT')
+            ORDER BY DT DESC
+        ) AS RN
+    FROM dbo.{DbName}
+),
+FinalData AS
+(
+    SELECT
+        LD.DT,
+        LD.ReportDate,
+        LD.Shift,
+        LD.TARGET,
+        LD.ACTUAL
+    FROM LatestData LD
+    WHERE LD.RN = 1
+      {shift_filter}
+)
+SELECT
+    DATEPART(ISO_WEEK, ReportDate)  AS ISOWeek,
+    ISNULL(SUM(TARGET), 0)         AS WK_TARGET,
+    ISNULL(SUM(ACTUAL), 0)         AS WK_ACTUAL
+FROM FinalData
+WHERE YEAR(ReportDate)  = YEAR(@ReportDate)
+  AND MONTH(ReportDate) = MONTH(@ReportDate)
+GROUP BY DATEPART(ISO_WEEK, ReportDate)
+ORDER BY ISOWeek;
 """
 
 

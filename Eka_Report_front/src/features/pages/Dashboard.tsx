@@ -28,13 +28,14 @@ export default function Dashboard() {
   const [startDate, setStartDate] = useState("2026-04-01");
   const [lastDate, setLastDate] = useState("2027-03-31");
   const [shift, setShift] = useState("A");
+  const [reportType, setReportType] = useState<"R2" | "R3">("R2");
 
   // Status states
   const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   // File access states
-  const [lastGeneratedFile, setLastGeneratedFile] = useState<{ filepath: string; filename: string } | null>(null);
+  const [lastGeneratedFile, setLastGeneratedFile] = useState<{ filepath: string; filename: string; type: "R2" | "R3" } | null>(null);
   const [isOpeningFile, setIsOpeningFile] = useState(false);
   const [isOpeningFolder, setIsOpeningFolder] = useState(false);
 
@@ -54,7 +55,6 @@ export default function Dashboard() {
     setLastGeneratedFile(null);
 
     try {
-      // API payload schema: MgmtProdReportRequest
       const payload = {
         ReportDate: reportDate,
         StartDate: startDate,
@@ -62,24 +62,31 @@ export default function Dashboard() {
         Shift: shift
       };
 
-      // Call the API backend which returns JSON file info
       interface GenerateReportResponse {
         status: string;
         filepath: string;
         filename: string;
       }
-      const response = await apiClient<GenerateReportResponse>("/api/mgmt-production-report", {
+
+      const endpoint = reportType === "R3" 
+        ? "/api/prod-report-type2" 
+        : "/api/mgmt-production-report";
+
+      const response = await apiClient<GenerateReportResponse>(endpoint, {
         body: payload
       });
 
       setLastGeneratedFile({
         filepath: response.filepath,
-        filename: response.filename
+        filename: response.filename,
+        type: reportType
       });
 
       setToast({
         type: "success",
-        message: `Management report generated successfully!`
+        message: reportType === "R3" 
+          ? "Production Report R3 generated successfully!" 
+          : "Management report generated successfully!"
       });
     } catch (err: any) {
       console.error("Download error:", err);
@@ -96,7 +103,10 @@ export default function Dashboard() {
     if (!lastGeneratedFile) return;
     setIsOpeningFile(true);
     try {
-      await apiClient("/api/open-file", {
+      const endpoint = lastGeneratedFile.type === "R3"
+        ? "/api/prod-report-type2/open-file"
+        : "/api/open-file";
+      await apiClient(endpoint, {
         body: { filepath: lastGeneratedFile.filepath }
       });
       setToast({
@@ -118,7 +128,10 @@ export default function Dashboard() {
     if (!lastGeneratedFile) return;
     setIsOpeningFolder(true);
     try {
-      await apiClient("/api/open-folder", {
+      const endpoint = lastGeneratedFile.type === "R3"
+        ? "/api/prod-report-type2/open-folder"
+        : "/api/open-folder";
+      await apiClient(endpoint, {
         body: { filepath: lastGeneratedFile.filepath }
       });
       setToast({
@@ -194,9 +207,9 @@ export default function Dashboard() {
           <div className="absolute top-0 right-0 p-3 text-violet-500/10 group-hover:text-violet-500/20 transition-all duration-300">
             <FileCheck className="w-16 h-16" />
           </div>
-          <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Template Source</p>
-          <h3 className="text-xl font-bold text-slate-900 mt-2">EKA Production Report_R2</h3>
-          <p className="text-xs text-slate-400 mt-1">Standardized Excel binary skeleton structure.</p>
+          <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Template Sources</p>
+          <h3 className="text-xl font-bold text-slate-900 mt-2">MProduction &amp; R3 Sheets</h3>
+          <p className="text-xs text-slate-400 mt-1">Standardized Excel files for Management &amp; Type-2 runs.</p>
         </div>
       </div>
 
@@ -211,9 +224,43 @@ export default function Dashboard() {
                 <FileSpreadsheet className="w-5.5 h-5.5 text-primary" />
                 Configure Date Parameters
               </h3>
-              <p className="text-xs text-slate-500 leading-relaxed mb-6">
+              <p className="text-xs text-slate-500 leading-relaxed mb-4">
                 Fill in the report details below to compile the spreadsheet. The backend will fetch corresponding historical records from SQL Server and populate the Excel template worksheets.
               </p>
+            </div>
+
+            {/* Segmented Control / Tabs to select Report Type */}
+            <div className="flex bg-slate-100 p-1 rounded-xl w-full max-w-md border border-slate-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setReportType("R2");
+                  setLastGeneratedFile(null);
+                }}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                  reportType === "R2"
+                    ? "bg-white text-primary shadow-sm border border-slate-200/50"
+                    : "text-slate-600 hover:text-slate-950 hover:bg-slate-200/50"
+                }`}
+              >
+                <FileSpreadsheet className="w-4.5 h-4.5" />
+                Management Report (R2)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setReportType("R3");
+                  setLastGeneratedFile(null);
+                }}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                  reportType === "R3"
+                    ? "bg-white text-primary shadow-sm border border-slate-200/50"
+                    : "text-slate-600 hover:text-slate-950 hover:bg-slate-200/50"
+                }`}
+              >
+                <TrendingUp className="w-4.5 h-4.5" />
+                Production Report (R3)
+              </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
@@ -382,7 +429,7 @@ export default function Dashboard() {
                 <span className="h-5 w-5 bg-teal-50 text-primary border border-teal-200/50 rounded flex items-center justify-center font-bold shrink-0">3</span>
                 <div>
                   <strong className="text-slate-800 block mb-0.5">Excel Output format</strong>
-                  A customized, formatted spreadsheet is outputted containing sheets such as <code className="bg-slate-200/60 font-mono px-1 rounded">SQL Work</code> with automated formulas.
+                  A customized, formatted spreadsheet is outputted containing sheets such as <code className="bg-slate-200/60 font-mono px-1 rounded">{reportType === "R2" ? "Manag Report" : "Prod Report"}</code> with automated formulas.
                 </div>
               </li>
             </ul>

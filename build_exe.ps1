@@ -4,7 +4,7 @@
 $ErrorActionPreference = "Stop"
 
 # Define paths
-$WorkspaceRoot = "d:\Eka_Report_exe"
+$WorkspaceRoot = $PSScriptRoot
 $FrontendDir = Join-Path $WorkspaceRoot "Eka_Report_front"
 $BackendDir = Join-Path $WorkspaceRoot "Eka_Report_back"
 $FrontendDist = Join-Path $FrontendDir "dist"
@@ -96,6 +96,8 @@ Set-Location $BackendDir
 
 # Run PyInstaller with uvicorn and webview hidden imports and static files
 # Note: In Windows, the --add-data separator is a semicolon (;)
+Write-Host "DEBUG: PyInstaller path is '$PyInstallerExe'" -ForegroundColor Yellow
+Write-Host "DEBUG: Test-Path result is: $(Test-Path $PyInstallerExe)" -ForegroundColor Yellow
 $IconPath = Join-Path $BackendDir "eka_logo.ico"
 & $PyInstallerExe --noconfirm --onedir --noconsole `
     --name "EkaReportStudio" `
@@ -103,7 +105,8 @@ $IconPath = Join-Path $BackendDir "eka_logo.ico"
     --add-data "$FrontendDist;dist" `
     --add-data "app;app" `
     --add-data ".env;." `
-    --add-data "EKA Production Report_R2.xlsx;." `
+    --add-data "ProductionReport_R3.xlsx;." `
+    --add-data "MProductionReport.xlsx;." `
     --hidden-import "uvicorn.protocols.http.h11_impl" `
     --hidden-import "uvicorn.protocols.http.httptools_impl" `
     --hidden-import "uvicorn.protocols.websockets.websockets_impl" `
