@@ -27,7 +27,7 @@ export default function Dashboard() {
   });
   const [startDate, setStartDate] = useState("2026-04-01");
   const [lastDate, setLastDate] = useState("2027-03-31");
-  const [shift, setShift] = useState("All");
+  const [shift, setShift] = useState("A");
 
   // Status states
   const [isLoading, setIsLoading] = useState(false);
@@ -278,9 +278,10 @@ export default function Dashboard() {
                   onChange={(e) => setShift(e.target.value)}
                   className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all w-full cursor-pointer"
                 >
-                  <option value="All">All Shifts</option>
                   <option value="A">Shift A</option>
                   <option value="B">Shift B</option>
+                  <option value="C">Shift C</option>
+                  <option value="D">Shift D</option>
                 </select>
               </div>
 
