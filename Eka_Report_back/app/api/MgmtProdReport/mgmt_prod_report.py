@@ -72,6 +72,12 @@ def generate_mgmt_production_report(
         # 3. Run main SQL query for Micky
         cursor.execute(SaarthiMickyReportTCFBIW(payload.ReportDate, payload.StartDate, payload.LastDate, payload.Shift,"S_TCF"))
         rows = cursor.fetchall()
+        
+        columns = [col[0] for col in cursor.description]
+        print("--- Daily Line Stop Row Details ---")
+        for row in rows:
+            for col_name, val in zip(columns, row):
+                print(f"{col_name} : {val}")
 
         cursor.execute(SaarthiMickyReportTCFBIW(payload.ReportDate, payload.StartDate, payload.LastDate, payload.Shift,"M_TCF"))
         rows1 = cursor.fetchall()
@@ -86,11 +92,7 @@ def generate_mgmt_production_report(
         cursor.execute(LineStopRecordDaily(payload.ReportDate))
         daily_line_stops = cursor.fetchall()
 
-        columns = [col[0] for col in cursor.description]
-        print("--- Daily Line Stop Row Details ---")
-        for row in daily_line_stops:
-            for col_name, val in zip(columns, row):
-                print(f"{col_name} : {val}")
+       
 
         cursor.execute(LineStopRecordMonthly(payload.ReportDate))
         monthly_line_stops = cursor.fetchall()
