@@ -66,3 +66,7 @@ Thumbs.db
 ~$*.xlsx
 ~$*.xls
 ~$*
+
+# Allow frontend shared lib folder
+!Eka_Report_front/src/shared/lib/
+
