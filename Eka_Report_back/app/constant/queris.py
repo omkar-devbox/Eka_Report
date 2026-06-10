@@ -753,32 +753,22 @@ MaxRemark AS
 ),
 ProdLoss AS
 (
-    SELECT
-        CASE 
-            WHEN StationNo BETWEEN 31 AND 36 THEN StationNo
-            WHEN StationNo IN (10, 20, 30, 40, 50, 60) THEN (StationNo / 10) + 30
-            ELSE StationNo
-        END AS StationNo,
-        MAX(Shift) AS Shift,
-        MIN(ShiftStart) AS ShiftStart,
-        MAX(ShiftEnd) AS ShiftEnd,
-        SUM(ProdCount) AS ProdCount,
-        SUM(ProdLoss) AS ProdLoss,
-        SUM(ShiftTime) AS ShiftTime,
-        SUM(BreakTime) AS BreakTime,
-        SUM(LinePause) AS LinePause,
-        SUM(DownTime) AS DownTime,
-        SUM(ShiftWorkingTime) AS ShiftWorkingTime,
-        AVG(OEE) AS OEE
+    SELECT TOP 1
+        Shift,
+        ShiftStart,
+        ShiftEnd,
+        ProdCount,
+        ProdLoss,
+        ShiftTime,
+        BreakTime,
+        LinePause,
+        DownTime,
+        ShiftWorkingTime,
+        OEE
     FROM dbo.Production_Loss
     WHERE CAST(DT AS DATE) = '{ReportDate}'
       {PL_ShiftFilter}
-    GROUP BY 
-        CASE 
-            WHEN StationNo BETWEEN 31 AND 36 THEN StationNo
-            WHEN StationNo IN (10, 20, 30, 40, 50, 60) THEN (StationNo / 10) + 30
-            ELSE StationNo
-        END
+    ORDER BY Shift ASC
 )
 SELECT
     S.StationNumber,
@@ -805,16 +795,16 @@ SELECT
     PL.OEE
 
 FROM (
-    SELECT 'CH-10' AS StationNumber, 31 AS StationNo
-    UNION ALL SELECT 'CH-20', 32
-    UNION ALL SELECT 'CH-30', 33
-    UNION ALL SELECT 'CH-40', 34
-    UNION ALL SELECT 'CH-50', 35
-    UNION ALL SELECT 'CH-60', 36
+    SELECT 'CH-10' AS StationNumber
+    UNION ALL SELECT 'CH-20'
+    UNION ALL SELECT 'CH-30'
+    UNION ALL SELECT 'CH-40'
+    UNION ALL SELECT 'CH-50'
+    UNION ALL SELECT 'CH-60'
 ) S
 LEFT JOIN AggData A ON S.StationNumber = A.StationNumber
 LEFT JOIN MaxRemark MR ON S.StationNumber = MR.StationNumber AND MR.RN = 1
-LEFT JOIN ProdLoss PL ON PL.StationNo = S.StationNo
+LEFT JOIN ProdLoss PL ON 1=1
 ORDER BY S.StationNumber;
 """
 
