@@ -11,7 +11,8 @@ import {
   FileCheck,
   Building2,
   FolderOpen,
-  ExternalLink
+  ExternalLink,
+  Layers
 } from "lucide-react";
 import { apiClient } from "@/app/api/api-client";
 
@@ -26,6 +27,7 @@ export default function Dashboard() {
   });
   const [startDate, setStartDate] = useState("2026-04-01");
   const [lastDate, setLastDate] = useState("2027-03-31");
+  const [shift, setShift] = useState("All");
 
   // Status states
   const [isLoading, setIsLoading] = useState(false);
@@ -56,7 +58,8 @@ export default function Dashboard() {
       const payload = {
         ReportDate: reportDate,
         StartDate: startDate,
-        LastDate: lastDate
+        LastDate: lastDate,
+        Shift: shift
       };
 
       // Call the API backend which returns JSON file info
@@ -213,7 +216,7 @@ export default function Dashboard() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
               
               {/* ReportDate Field */}
               <div className="flex flex-col gap-2">
@@ -261,6 +264,24 @@ export default function Dashboard() {
                   required
                   className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold font-mono text-slate-800 placeholder-slate-400 focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all w-full"
                 />
+              </div>
+
+              {/* Shift Dropdown Field */}
+              <div className="flex flex-col gap-2">
+                <label htmlFor="Shift" className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-primary" />
+                  Shift
+                </label>
+                <select
+                  id="Shift"
+                  value={shift}
+                  onChange={(e) => setShift(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all w-full cursor-pointer"
+                >
+                  <option value="All">All Shifts</option>
+                  <option value="A">Shift A</option>
+                  <option value="B">Shift B</option>
+                </select>
               </div>
 
             </div>
