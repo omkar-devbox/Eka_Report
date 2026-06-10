@@ -1,26 +1,4 @@
 def SaarthiMickyReportTCFBIW(ReportDate, StartDate, LastDate, Shift="All",DbName="") -> str:
-    shift_filter = ""
-    if Shift != "All":
-        shift_filter = f"AND LTRIM(RTRIM(LD.Shift)) = '{Shift}'"
-    else:
-        shift_filter = f"""AND
-      (
-            LD.Shift IS NOT NULL
-
-            OR
-
-            (
-                LD.Shift IS NULL
-                AND NOT EXISTS
-                (
-                    SELECT 1
-                    FROM dbo.{DbName} T
-                    WHERE CAST(T.DT AS DATE) = LD.ReportDate
-                      AND T.Shift IS NOT NULL
-                )
-            )
-      )"""
-
     return f""" 
 DECLARE @ReportDate DATE = '{ReportDate}';
 DECLARE @StartDate  DATE = '{StartDate}';
@@ -33,14 +11,12 @@ WITH LatestData AS
     SELECT
         DT,
         CAST(DT AS DATE) AS ReportDate,
-        Shift,
         TARGET,
         ACTUAL,
         ROW_NUMBER() OVER
         (
             PARTITION BY
-                CAST(DT AS DATE),
-                ISNULL(CAST(Shift AS VARCHAR(50)), 'NO_SHIFT')
+                CAST(DT AS DATE)
             ORDER BY DT DESC
         ) AS RN
     FROM dbo.{DbName}
@@ -50,12 +26,10 @@ FinalData AS
     SELECT
         LD.DT,
         LD.ReportDate,
-        LD.Shift,
         LD.TARGET,
         LD.ACTUAL
     FROM LatestData LD
     WHERE LD.RN = 1
-      {shift_filter}
 ),
 MonthData AS
 (
@@ -191,28 +165,6 @@ FROM MonthData;
 
 
 def SaarthiMickyReportTCFBIW1(ReportDate, StartDate, LastDate, Shift="All",DbName="") -> str:
-    shift_filter = ""
-    if Shift != "All":
-        shift_filter = f"AND LTRIM(RTRIM(LD.Shift)) = '{Shift}'"
-    else:
-        shift_filter = f"""AND
-      (
-            LD.Shift IS NOT NULL
-
-            OR
-
-            (
-                LD.Shift IS NULL
-                AND NOT EXISTS
-                (
-                    SELECT 1
-                    FROM dbo.{DbName} T
-                    WHERE CAST(T.DT AS DATE) = LD.ReportDate
-                      AND T.Shift IS NOT NULL
-                )
-            )
-      )"""
-
     return f""" 
 DECLARE @ReportDate DATE = '{ReportDate}';
 DECLARE @StartDate  DATE = '{StartDate}';
@@ -225,14 +177,12 @@ WITH LatestData AS
     SELECT
         DT,
         CAST(DT AS DATE) AS ReportDate,
-        Shift,
         TARGET,
         ACTUAL,
         ROW_NUMBER() OVER
         (
             PARTITION BY
-                CAST(DT AS DATE),
-                ISNULL(CAST(Shift AS VARCHAR(50)), 'NO_SHIFT')
+                CAST(DT AS DATE)
             ORDER BY DT DESC
         ) AS RN
     FROM dbo.{DbName}
@@ -242,12 +192,10 @@ FinalData AS
     SELECT
         LD.DT,
         LD.ReportDate,
-        LD.Shift,
         LD.TARGET,
         LD.ACTUAL
     FROM LatestData LD
     WHERE LD.RN = 1
-      {shift_filter}
 ),
 MonthData AS
 (
@@ -378,85 +326,6 @@ SELECT
     -- Auto Detect Month Days (28/29/30/31)
     DAY(EOMONTH(@ReportDate)) AS DAYS_IN_MONTH
 FROM MonthData;
-"""
-
-
-def SaarthiMickyWeekwiseMonthly(ReportDate, Shift="All", DbName="") -> str:
-    """
-    Returns one row per ISO calendar week that has data in the report month.
-
-    Result columns (3 total):
-        [0]  ISOWeek    -- ISO 8601 week number (Monday start, 1-53)
-        [1]  WK_TARGET  -- sum of TARGET for that ISO week
-        [2]  WK_ACTUAL  -- sum of ACTUAL for that ISO week
-
-    Rows are ordered by ISOWeek ASC.
-    """
-    shift_filter = ""
-    if Shift != "All":
-        shift_filter = f"AND LTRIM(RTRIM(LD.Shift)) = '{Shift}'"
-    else:
-        shift_filter = f"""AND
-      (
-            LD.Shift IS NOT NULL
-
-            OR
-
-            (
-                LD.Shift IS NULL
-                AND NOT EXISTS
-                (
-                    SELECT 1
-                    FROM dbo.{DbName} T
-                    WHERE CAST(T.DT AS DATE) = LD.ReportDate
-                      AND T.Shift IS NOT NULL
-                )
-            )
-      )"""
-
-    return f"""
-DECLARE @ReportDate DATE = '{ReportDate}';
-
-SET DATEFIRST 1; -- Monday (ISO 8601 week start)
-
-WITH LatestData AS
-(
-    SELECT
-        DT,
-        CAST(DT AS DATE) AS ReportDate,
-        Shift,
-        TARGET,
-        ACTUAL,
-        ROW_NUMBER() OVER
-        (
-            PARTITION BY
-                CAST(DT AS DATE),
-                ISNULL(CAST(Shift AS VARCHAR(50)), 'NO_SHIFT')
-            ORDER BY DT DESC
-        ) AS RN
-    FROM dbo.{DbName}
-),
-FinalData AS
-(
-    SELECT
-        LD.DT,
-        LD.ReportDate,
-        LD.Shift,
-        LD.TARGET,
-        LD.ACTUAL
-    FROM LatestData LD
-    WHERE LD.RN = 1
-      {shift_filter}
-)
-SELECT
-    DATEPART(ISO_WEEK, ReportDate)  AS ISOWeek,
-    ISNULL(SUM(TARGET), 0)         AS WK_TARGET,
-    ISNULL(SUM(ACTUAL), 0)         AS WK_ACTUAL
-FROM FinalData
-WHERE YEAR(ReportDate)  = YEAR(@ReportDate)
-  AND MONTH(ReportDate) = MONTH(@ReportDate)
-GROUP BY DATEPART(ISO_WEEK, ReportDate)
-ORDER BY ISOWeek;
 """
 
 
@@ -774,6 +643,30 @@ def ProductionLossDaily(ReportDate, Shift="All") -> str:
     if Shift != "All":
         shift_cond = f"AND LTRIM(RTRIM(Shift)) = '{Shift}'"
     return f"""
+WITH LatestLoss AS
+(
+    SELECT
+        Shift,
+        ShiftStart,
+        ShiftEnd,
+        ProdCount,
+        ProdLoss,
+        ShiftTime,
+        BreakTime,
+        LinePause,
+        DownTime,
+        ShiftWorkingTime,
+        OEE,
+        DT,
+        ROW_NUMBER() OVER
+        (
+            PARTITION BY
+                LTRIM(RTRIM(Shift))
+            ORDER BY DT DESC
+        ) AS RN
+    FROM dbo.Production_Loss
+    WHERE CAST(DT AS DATE) = '{ReportDate}' {shift_cond}
+)
 SELECT
     Shift,
     ShiftStart,
@@ -787,15 +680,15 @@ SELECT
     ShiftWorkingTime,
     OEE,
     DT
-FROM dbo.Production_Loss
-WHERE CAST(DT AS DATE) = '{ReportDate}' {shift_cond}
+FROM LatestLoss
+WHERE RN = 1
 ORDER BY Shift ASC;
 """
 
 def ChassisLineStatus(ReportDate, Shift="All") -> str:
     PL_ShiftFilter = ""
     if Shift != "All":
-        PL_ShiftFilter = f"AND PL.Shift = '{Shift}'"
+        PL_ShiftFilter = f"AND Shift = '{Shift}'"
 
     return f"""
 WITH CH_All AS
@@ -905,165 +798,3 @@ ORDER BY S.StationNumber;
 
 # ALTER TABLE [TRIM_PC].[dbo].[Production_Loss]
 # ADD StationNo INT NULL;
-
-
-def SaarthiMickyReportWeekly(ReportYear, StartDate, LastDate, Shift="All", DbName="") -> str:
-    """
-    Fetches production data aggregated by ISO calendar week (Week 1 – Week 53)
-    for a given calendar year.  Structure mirrors the monthly query but the
-    grouping dimension is DATEPART(ISO_WEEK, ReportDate) instead of MONTH.
-
-    Parameters
-    ----------
-    ReportYear : int | str
-        The 4-digit calendar year to report on (e.g. 2026).
-    StartDate  : str  – financial-year start date  (YYYY-MM-DD)
-    LastDate   : str  – financial-year end date    (YYYY-MM-DD)
-    Shift      : str  – 'All' or a specific shift name
-    DbName     : str  – table name in dbo schema   (e.g. 'S_TCF')
-    """
-    shift_filter = ""
-    if Shift != "All":
-        shift_filter = f"AND LTRIM(RTRIM(LD.Shift)) = '{Shift}'"
-    else:
-        shift_filter = f"""AND
-      (
-            LD.Shift IS NOT NULL
-
-            OR
-
-            (
-                LD.Shift IS NULL
-                AND NOT EXISTS
-                (
-                    SELECT 1
-                    FROM dbo.{DbName} T
-                    WHERE CAST(T.DT AS DATE) = LD.ReportDate
-                      AND T.Shift IS NOT NULL
-                )
-            )
-      )"""
-
-    # Build W1..W53 pivot columns dynamically
-    week_columns = "\n".join(
-        f"    SUM(CASE WHEN ISOWeek = {w} THEN TARGET ELSE 0 END) AS W{w}_TARGET,\n"
-        f"    SUM(CASE WHEN ISOWeek = {w} THEN ACTUAL ELSE 0 END) AS W{w}_ACTUAL,"
-        for w in range(1, 54)
-    )
-
-    return f"""
-DECLARE @ReportYear  INT  = {ReportYear};
-DECLARE @StartDate   DATE = '{StartDate}';
-DECLARE @LastDate    DATE = '{LastDate}';
-
-SET DATEFIRST 1; -- Monday (ISO week starts on Monday)
-
-WITH LatestData AS
-(
-    SELECT
-        DT,
-        CAST(DT AS DATE) AS ReportDate,
-        Shift,
-        TARGET,
-        ACTUAL,
-        ROW_NUMBER() OVER
-        (
-            PARTITION BY
-                CAST(DT AS DATE),
-                ISNULL(CAST(Shift AS VARCHAR(50)), 'NO_SHIFT')
-            ORDER BY DT DESC
-        ) AS RN
-    FROM dbo.{DbName}
-),
-FinalData AS
-(
-    SELECT
-        LD.DT,
-        LD.ReportDate,
-        LD.Shift,
-        LD.TARGET,
-        LD.ACTUAL
-    FROM LatestData LD
-    WHERE LD.RN = 1
-      {shift_filter}
-),
-YearData AS
-(
-    SELECT
-        ReportDate,
-        TARGET,
-        ACTUAL,
-        -- ISO week number within the calendar year (1-53)
-        DATEPART(ISO_WEEK, ReportDate) AS ISOWeek,
-        -- Handle the edge case where ISO week 53 of previous year
-        -- or ISO week 1 of next year bleeds across Jan/Dec boundary.
-        -- We only keep rows whose ISO year matches @ReportYear.
-        DATEPART(YEAR,
-            -- ISO year: shift date to Thursday of that week; its year = ISO year
-            DATEADD(DAY, 3 - (DATEPART(WEEKDAY, ReportDate) + 5) % 7, ReportDate)
-        ) AS ISOYear
-    FROM FinalData
-    WHERE YEAR(ReportDate) = @ReportYear
-       -- Include Dec days that may belong to ISO week 1 of next year
-       -- and Jan days that may belong to ISO week 52/53 of prev year
-       -- by filtering on ISOYear instead; handled below via outer WHERE
-),
-WeekData AS
-(
-    SELECT
-        ReportDate,
-        TARGET,
-        ACTUAL,
-        ISOWeek
-    FROM YearData
-    WHERE ISOYear = @ReportYear
-)
-
-SELECT
-    -- ── Year-level summary ───────────────────────────────────────────────
-    @ReportYear AS REPORT_YEAR,
-
-    -- Previous Financial Year totals
-    (
-        SELECT ISNULL(SUM(TARGET), 0)
-        FROM FinalData FD
-        WHERE FD.ReportDate BETWEEN
-              DATEADD(YEAR, -1, @StartDate)
-              AND
-              DATEADD(YEAR, -1, @LastDate)
-    ) AS TARGET_PREVIOUS_FINANCIAL_YEAR,
-
-    (
-        SELECT ISNULL(SUM(ACTUAL), 0)
-        FROM FinalData FD
-        WHERE FD.ReportDate BETWEEN
-              DATEADD(YEAR, -1, @StartDate)
-              AND
-              DATEADD(YEAR, -1, @LastDate)
-    ) AS ACTUAL_PREVIOUS_FINANCIAL_YEAR,
-
-    -- YTD totals (financial year start → financial year end)
-    (
-        SELECT ISNULL(SUM(TARGET), 0)
-        FROM FinalData FD
-        WHERE FD.ReportDate BETWEEN @StartDate AND @LastDate
-    ) AS YTD_TARGET,
-
-    (
-        SELECT ISNULL(SUM(ACTUAL), 0)
-        FROM FinalData FD
-        WHERE FD.ReportDate BETWEEN @StartDate AND @LastDate
-    ) AS YTD_ACTUAL,
-
-    -- Full-year totals (calendar year)
-    SUM(TARGET) AS YEARLY_TARGET,
-    SUM(ACTUAL) AS YEARLY_ACTUAL,
-
-    -- Total ISO weeks that have data in this year
-    COUNT(DISTINCT ISOWeek) AS WEEKS_WITH_DATA,
-
-    -- ── Per-week columns  W1_TARGET / W1_ACTUAL … W53_TARGET / W53_ACTUAL ─
-{week_columns}
-
-FROM WeekData;
-"""

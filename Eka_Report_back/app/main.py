@@ -8,8 +8,6 @@ from fastapi.responses import FileResponse
 from app.core.config import settings
 from app.api.endpoints import health
 from app.api.MgmtProdReport import mgmt_prod_report
-from app.api.ProdReportType2 import prod_report_type2
-
 
 # Explicitly register JavaScript and CSS MIME types to prevent Windows Registry overrides
 mimetypes.add_type("application/javascript", ".js", True)
@@ -34,7 +32,6 @@ app.add_middleware(
 # Include routers
 app.include_router(health.router)
 app.include_router(mgmt_prod_report.router, prefix="/api", tags=["Reports"])
-app.include_router(prod_report_type2.router, prefix="/api", tags=["Reports"])
 
 
 def get_frontend_dist_path():
