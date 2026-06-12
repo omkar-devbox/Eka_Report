@@ -8,14 +8,12 @@ import openpyxl
 import pyodbc
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
-
-
 from app.core.database import get_db_connection
-from app.schemas.mgmt_prod_report import MgmtProdReportRequest, ProdReportType2Request, OpenFileRequest
+from app.schemas.mgmt_prod_report import ProdReportType2Request, OpenFileRequest
 from app.constant.queris import (
     SaarthiMickyReportTCFBIW,
     LineStopRecordDaily,
-    LineStopRecordMonthly,
+    LineStopRecordMonthly
 )
 
 router = APIRouter()
@@ -57,30 +55,6 @@ def generate_mgmt_production_report(
         except (ValueError, TypeError):
             return 0.0
 
-    def populate_row(ws, row_idx, query_row):
-        if not query_row:
-            return
-        ws.cell(row=row_idx, column=5).value = safe_int(query_row[13])
-        ws.cell(row=row_idx, column=6).value = safe_int(query_row[14])
-        ws.cell(row=row_idx, column=7).value = safe_int(query_row[14]) - safe_int(query_row[13])
-        
-        ws.cell(row=row_idx, column=8).value = safe_int(query_row[4])
-        ws.cell(row=row_idx, column=9).value = safe_int(query_row[6])
-        ws.cell(row=row_idx, column=10).value = safe_int(query_row[8])
-        ws.cell(row=row_idx, column=11).value = safe_int(query_row[10])
-        ws.cell(row=row_idx, column=12).value = safe_int(query_row[12])
-        
-        ws.cell(row=row_idx, column=13).value = safe_int(query_row[1])
-        ws.cell(row=row_idx, column=14).value = safe_int(query_row[2])
-        ws.cell(row=row_idx, column=15).value = safe_int(query_row[2]) - safe_int(query_row[1])
-        
-        ws.cell(row=row_idx, column=16).value = safe_int(query_row[20])
-        ws.cell(row=row_idx, column=18).value = safe_int(query_row[16])
-
-        for col_idx in [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18]:
-            cell = ws.cell(row=row_idx, column=col_idx)
-            cell.number_format = '@'
-
     try:
         # 1. Parse and validate dates
         try:
@@ -104,205 +78,88 @@ def generate_mgmt_production_report(
         cursor = conn.cursor()
       
 
-        # 3. Run main SQL query for Micky
+        # 3. Run main SQL query 
+
+        # Saarthi S TCF Report
         cursor.execute(SaarthiMickyReportTCFBIW(payload.ReportDate, payload.StartDate, payload.LastDate, payload.Shift,"S_TCF"))
-        rows = cursor.fetchall()
+        rows0 = cursor.fetchall()
         
         columns = [col[0] for col in cursor.description]
         print("--- Daily Line Stop Row Details ---")
-        for row in rows:
+        for row in rows0:
             for col_name, val in zip(columns, row):
                 print(f"{col_name} : {val}")
 
+        # Micky M TCF Report
         cursor.execute(SaarthiMickyReportTCFBIW(payload.ReportDate, payload.StartDate, payload.LastDate, payload.Shift,"M_TCF"))
         rows1 = cursor.fetchall()
 
+        # Saarthi S BIW Report
         cursor.execute(SaarthiMickyReportTCFBIW(payload.ReportDate, payload.StartDate, payload.LastDate, payload.Shift,"S_BIW"))
         rows2 = cursor.fetchall()
 
+        # Micky M BIW Report
+        cursor.execute(SaarthiMickyReportTCFBIW(payload.ReportDate, payload.StartDate, payload.LastDate, payload.Shift,"M_BIW"))
+        rows3 = cursor.fetchall()
 
-
-        # 4. Run line stop queries (Daily & Monthly) and Production Loss query
+        # Run line stop queries (Daily & Monthly) and Production Loss query
         cursor.execute(LineStopRecordDaily(payload.ReportDate))
-        daily_line_stops = cursor.fetchall()
-
-       
+        rows4 = cursor.fetchall()
 
         cursor.execute(LineStopRecordMonthly(payload.ReportDate))
-        monthly_line_stops = cursor.fetchall()
+        rows5 = cursor.fetchall()
 
-  
-  
-        # 6. Load Excel template and populate sheets
+        # Load Excel template and populate sheets
         wb = openpyxl.load_workbook(TEMPLATE_PATH)
-
   
-
-        # G. Update Date & Time and date formatting in summary sheets
+        # Update Date & Time and date formatting in summary sheets
         current_date = datetime.date.today()
         current_time = datetime.datetime.now().time()
-        
-        if "Prod Report" in wb.sheetnames:
-            ws = wb["Prod Report"]
-            
-            # Update Date & Time
-            ws.cell(row=2, column=2).value = current_date.strftime("%d-%m-%Y")
-            ws.cell(row=3, column=2).value = current_time
-            
-            # Update Month under General Header (R2)
-            ws.cell(row=2, column=18).value = report_date.strftime("%b %Y")
-            
-            # Available Working Days & Remaining Days
-            days_in_month = calendar.monthrange(report_date.year, report_date.month)[1]
-            remaining_days = days_in_month - 4  # 4 holidays subtracted
-            ws.cell(row=3, column=18).value = remaining_days
-            
-            today_day = report_date.day
-            remaining_days_left = max(0, days_in_month - today_day - 4)
-            ws.cell(row=4, column=18).value = remaining_days_left
-            
-            # Update Month Label in sections (E8, E17, E25)
-            month_label = report_date.strftime("%b %Y")
-            for r in [8, 17, 25]:
-                ws.cell(row=r, column=5).value = month_label
-                ws.cell(row=r, column=5).number_format = '@'
+        for sname in ["Manag Report"]:
+            if sname in wb.sheetnames:
+                ws = wb[sname]
                 
-            # Update Daily Date Label in sections (M8, M17, M25)
-            daily_label = report_date.strftime("%d-%b-%Y")
-            for r in [8, 17, 25]:
-                ws.cell(row=r, column=13).value = daily_label
-                ws.cell(row=r, column=13).number_format = '@'
-                
-            # Update YTD Year Header (P8, P17, P25)
-            ytd_label = f"{(start_date.year) % 100:02d}-{(last_date.year) % 100:02d}"
-            for r in [8, 17, 25]:
-                ws.cell(row=r, column=16).value = ytd_label
-                ws.cell(row=r, column=16).number_format = '@'
-                
-            # Update FY Year Header (R8, R17, R25)
-            fy_label = f"{(start_date.year - 1) % 100:02d}-{(start_date.year) % 100:02d}"
-            for r in [8, 17, 25]:
-                ws.cell(row=r, column=18).value = fy_label
-                ws.cell(row=r, column=18).number_format = '@'
+                # E2 (Date) (Report Generated Current Date)
+                cell_e2 = ws.cell(row=2, column=5)
+                cell_e2.number_format = '@'
+                cell_e2.value = current_date.strftime("%d-%m-%Y")
 
-            # Update Weekly Headers (W1, W2, W3, W4, W5 -> e.g. W23, W24, W25, W26, W27)
-            first_of_month = datetime.date(report_date.year, report_date.month, 1)
-            first_weekday = (first_of_month.weekday() + 1) % 7 + 1
-            week_headers = {}
-            for k in range(1, 6):
-                d_start = max(1, 7 * (k - 1) - first_weekday + 2)
-                d_end = min(days_in_month, 7 * k - first_weekday + 1)
-                if d_start <= days_in_month:
-                    mid_day = datetime.date(report_date.year, report_date.month, (d_start + d_end) // 2)
-                    week_headers[k] = f"W{mid_day.isocalendar()[1]}"
-                else:
-                    week_headers[k] = ""
+                # E3 (Time) (Report Generated Time)
+                cell_e3 = ws.cell(row=3, column=5)
+                cell_e3.number_format = '@'
+                cell_e3.value = current_time.strftime("%I:%M %p")
 
-            for r in [9, 18, 26]:
-                for k in range(1, 6):
-                    col_idx = 7 + k  # columns 8, 9, 10, 11, 12
-                    ws.cell(row=r, column=col_idx).value = week_headers[k]
-                    ws.cell(row=r, column=col_idx).number_format = '@'
+                # E4 (Report Date) (Report Generated Date)
+                cell_e4 = ws.cell(row=4, column=5)
+                cell_e4.number_format = '@'
+                cell_e4.value = report_date.strftime("%d-%m-%Y")
 
-            # Populate Vehicle & BIW Rollout tables
-            # Saarthi Vehicle: Row 10
-            if rows:
-                populate_row(ws, 10, rows[0])
-            # Micky Vehicle: Row 11
-            if rows1:
-                populate_row(ws, 11, rows1[0])
-            # Saarthi BIW: Row 19
-            if rows2:
-                populate_row(ws, 19, rows2[0])
+                # Update U5 (Available Working Days)
+                days_in_month = calendar.monthrange(report_date.year, report_date.month)[1]
+                remaining_days = days_in_month - 4  # 4 सुट्ट्या वजा
+                cell_u5 = ws.cell(row=5, column=21)
+                cell_u5.number_format = '@'
+                cell_u5.value = remaining_days
 
-            # A. Populate Daily Line Stops in 'Prod Report' sheet
-            daily_row_mapping = {
-                "Process Call": 35,
-                "Material Call": 36,
-                "Quality Call": 37,
-                "Maintenance Call": 38,
-                "Other": 39
-            }
-            
-            # Initialize table cells to 0/empty to ensure old/cached data is cleared
-            for r in daily_row_mapping.values():
-                for c in [5, 6, 7, 8, 9, 10, 11, 13]: # Chassis, Trim, Saarthi Main, Saarthi Sub, I-PUMA Main, I-PUMA Sub, Cargo Main, Cargo Sub
-                    ws.cell(row=r, column=c).value = 0
-                ws.cell(row=r, column=15).value = "" # Chassis Line Loss Reason
-                ws.cell(row=r, column=19).value = "" # Remark
-            
-            # Date at E32
-            ws.cell(row=32, column=5).value = report_date.strftime("%d-%m-%Y")
-            
-            for row in daily_line_stops:
-                type_of_call = row[0]
-                r = daily_row_mapping.get(type_of_call)
-                if r:
-                    val_chassis = to_mins(row[1])
-                    val_trim = to_mins(row[2])
-                    val_saarthi_main = to_mins(row[3])
-                    val_saarthi_sub = to_mins(row[4])
-                    val_ipuma_main = to_mins(row[5])
-                    val_ipuma_sub = to_mins(row[6])
-                    val_cargo_main = to_mins(row[7])
-                    val_cargo_sub = to_mins(row[8])
-                    
-                    ws.cell(row=r, column=5).value = val_chassis
-                    ws.cell(row=r, column=6).value = val_trim
-                    ws.cell(row=r, column=7).value = val_saarthi_main
-                    ws.cell(row=r, column=8).value = val_saarthi_sub
-                    ws.cell(row=r, column=9).value = val_ipuma_main
-                    ws.cell(row=r, column=10).value = val_ipuma_sub
-                    ws.cell(row=r, column=11).value = val_cargo_main
-                    ws.cell(row=r, column=13).value = val_cargo_sub
-                    
-                    ws.cell(row=r, column=15).value = row[9]
-                    ws.cell(row=r, column=19).value = row[10]
+                # Update U6 (Available Working Days)
+                today_day = report_date.day  # आजची तारीख
+                remaining_days = max(0, days_in_month - today_day - 4)  # 4 सुट्ट्या वजा
+                cell_u6 = ws.cell(row=6, column=21)
+                cell_u6.number_format = '@'
+                cell_u6.value = remaining_days
 
-        # Populate Daily sheet
-        if "Daily" in wb.sheetnames:
-            ws_daily = wb["Daily"]
+                # Update C15 (Show Fy YY YY - Prev Year)
+                cell_c15 = ws.cell(row=15, column=3)
+                cell_c15.number_format = '@'
+                cell_c15.value = f"FY {(start_date.year - 1) % 100:02d}-{start_date.year % 100:02d}"
 
-            def write_daily_block(data_row: int, agg_rows):
-                if not agg_rows:
-                    # Clear placeholders to 0/empty to prevent raw templates from being left behind
-                    ws_daily.cell(row=data_row, column=3).value  = report_date.strftime("%d-%m-%Y")
-                    ws_daily.cell(row=data_row, column=4).value  = 0
-                    ws_daily.cell(row=data_row, column=5).value  = 0
-                    ws_daily.cell(row=data_row, column=6).value  = 0
-                    ws_daily.cell(row=data_row, column=7).value  = 0
-                    ws_daily.cell(row=data_row, column=8).value  = 0
-                    ws_daily.cell(row=data_row, column=9).value  = 0
-                    ws_daily.cell(row=data_row, column=10).value = 0
-                    ws_daily.cell(row=data_row, column=11).value = 0
-                    ws_daily.cell(row=data_row, column=12).value = remaining_days
-                    ws_daily.cell(row=data_row, column=13).value = remaining_days_left
-                    return
-                
-                r = agg_rows[0]
-                daily_tgt   = safe_int(r[1])
-                daily_act   = safe_int(r[2])
-                monthly_tgt = safe_int(r[13])
-                monthly_act = safe_int(r[14])
-
-                ws_daily.cell(row=data_row, column=3).value  = report_date.strftime("%d-%m-%Y")
-                ws_daily.cell(row=data_row, column=4).value  = daily_tgt
-                ws_daily.cell(row=data_row, column=5).value  = daily_act
-                ws_daily.cell(row=data_row, column=6).value  = daily_act - daily_tgt
-                ws_daily.cell(row=data_row, column=7).value  = monthly_tgt
-                ws_daily.cell(row=data_row, column=8).value  = monthly_act
-                ws_daily.cell(row=data_row, column=9).value  = monthly_act - monthly_tgt
-                ws_daily.cell(row=data_row, column=10).value = safe_int(r[20])
-                ws_daily.cell(row=data_row, column=11).value = safe_int(r[16])
-                ws_daily.cell(row=data_row, column=12).value = remaining_days
-                ws_daily.cell(row=data_row, column=13).value = remaining_days_left
-
-            write_daily_block(data_row=2,  agg_rows=rows1)  # M_TCF
-            write_daily_block(data_row=12, agg_rows=rows)   # S_TCF
-            write_daily_block(data_row=21, agg_rows=None)   # M_BIW
-            write_daily_block(data_row=31, agg_rows=rows2)  # S_BIW
-
-         
+        for sname in ["Manag Report"]:
+            if sname in wb.sheetnames:
+                ws = wb[sname]
+                #------ Saarthi Production Report TCF------
+                # Update Daily Plan(Target)
+                cell_N11 = ws.cell(row=11, column=14)
+                cell_N11.number_format = '@'
         # 7. Save and return workbook
         wb.save(output_path)
 
