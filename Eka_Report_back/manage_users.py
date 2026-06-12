@@ -344,8 +344,18 @@ def cli_interactive_update():
 
 
 def cli_seed_users_func():
-    """Seed 15 users: user01 to user15, with password same as username."""
-    print("Seeding 15 users (user01 to user15)...")
+    """Seed default admin and 15 users (user01 to user15)."""
+    print("Seeding default admin user...")
+    admin_success = cli_add_user_func(
+        username="admin",
+        email="admin@example.com",
+        full_name="Admin User",
+        password="admin",
+        role="admin",
+        active=1
+    )
+    
+    print("\nSeeding 15 users (user01 to user15)...")
     success_count = 0
     for i in range(1, 16):
         username = f"user{i:02d}"
@@ -366,6 +376,8 @@ def cli_seed_users_func():
         if success:
             success_count += 1
     print(f"\nSeed complete: {success_count}/15 users created successfully.")
+    if admin_success:
+        print("Default admin user ('admin' with password 'admin') created successfully.")
 
 
 def interactive_menu():
@@ -379,7 +391,7 @@ def interactive_menu():
         print("  2. Add a new user")
         print("  3. Update a user")
         print("  4. Remove a user")
-        print("  5. Seed 15 default users (user01 to user15)")
+        print("  5. Seed default admin and 15 users (user01 to user15)")
         print("  6. Exit")
         choice = input("\nSelect an option (1-6): ").strip()
         if choice == "1":

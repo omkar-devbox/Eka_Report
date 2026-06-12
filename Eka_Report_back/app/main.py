@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from app.core.config import settings
 from app.api.endpoints import health
 from app.api.endpoints import auth
+from app.api.endpoints import users
 from app.api.MgmtProdReport import mgmt_prod_report
 from app.api.ProdReportType2 import prod_report_type2
 
@@ -34,6 +35,7 @@ app.add_middleware(
 # Include routers
 app.include_router(health.router)
 app.include_router(auth.router)
+app.include_router(users.router)
 app.include_router(mgmt_prod_report.router, prefix="/api", tags=["Reports"])
 app.include_router(prod_report_type2.router, prefix="/api", tags=["Reports"])
 
