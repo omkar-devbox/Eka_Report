@@ -1,0 +1,20 @@
+Traceback (most recent call last):
+  File "run.py", line 16, in <module>
+    from app.main import app
+  File "pyimod02_importers.py", line 457, in exec_module
+  File "app\main.py", line 10, in <module>
+    from app.api.endpoints import auth
+  File "pyimod02_importers.py", line 457, in exec_module
+  File "app\api\endpoints\auth.py", line 8, in <module>
+    from app.core.security import (
+    ...<5 lines>...
+    )
+  File "pyimod02_importers.py", line 457, in exec_module
+  File "app\core\security.py", line 13, in <module>
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+  File "passlib\context.py", line 1402, in __init__
+  File "passlib\context.py", line 1597, in load
+  File "passlib\context.py", line 635, in __init__
+  File "passlib\context.py", line 653, in _init_scheme_list
+  File "passlib\registry.py", line 352, in get_crypt_handler
+ModuleNotFoundError: No module named 'passlib.handlers.bcrypt'

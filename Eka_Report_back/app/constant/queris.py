@@ -104,11 +104,24 @@ SUM(CASE WHEN WeekNo = 3 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) A
 SUM(CASE WHEN WeekNo = 4 THEN TARGET ELSE 0 END) AS W4_TARGET,
 SUM(CASE WHEN WeekNo = 4 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W4_ACTUAL,
 
-SUM(CASE WHEN WeekNo >= 5 THEN TARGET ELSE 0 END) AS W5_TARGET,
-SUM(CASE WHEN WeekNo >= 5 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W5_ACTUAL,
+SUM(CASE WHEN WeekNo = 5 THEN TARGET ELSE 0 END) AS W5_TARGET,
+SUM(CASE WHEN WeekNo = 5 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W5_ACTUAL,
+
+SUM(CASE WHEN WeekNo >= 6 THEN TARGET ELSE 0 END) AS W6_TARGET,
+SUM(CASE WHEN WeekNo >= 6 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W6_ACTUAL,
 
     -- Monthly
-    SUM(TARGET) AS MONTHLY_TARGET,
+    ISNULL
+    (
+        (
+            SELECT TOP 1 TargetQty
+            FROM dbo.{DbName}
+            WHERE TargetDate IS NOT NULL
+              AND YEAR(TargetDate) = YEAR(@ReportDate)
+              AND MONTH(TargetDate) = MONTH(@ReportDate)
+        ),
+        0
+    ) AS MONTHLY_TARGET,
     SUM(CASE WHEN ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS MONTHLY_ACTUAL,
 
     -- Previous Financial Year
@@ -131,12 +144,16 @@ SUM(CASE WHEN WeekNo >= 5 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) 
     ) AS ACTUAL_PREVIOUS_FINANCIAL_YEAR,
 
     -- MTD (Month To Date)
+    ISNULL
     (
-        SELECT ISNULL(SUM(TARGET),0)
-        FROM FinalData FD
-        WHERE FD.ReportDate BETWEEN
-              DATEFROMPARTS(YEAR(@ReportDate),MONTH(@ReportDate),1)
-              AND @ReportDate
+        (
+            SELECT TOP 1 TargetQty
+            FROM dbo.{DbName}
+            WHERE TargetDate IS NOT NULL
+              AND YEAR(TargetDate) = YEAR(@ReportDate)
+              AND MONTH(TargetDate) = MONTH(@ReportDate)
+        ),
+        0
     ) AS MTD_TARGET,
 
     (
@@ -159,7 +176,11 @@ SUM(CASE WHEN WeekNo >= 5 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) 
     ) AS YTD_ACTUAL,
 
     -- Auto Detect Month Days (28/29/30/31)
-    DAY(EOMONTH(@ReportDate)) AS DAYS_IN_MONTH
+    DAY(EOMONTH(@ReportDate)) AS DAYS_IN_MONTH,
+
+    -- W6 (Yearly Week 6)
+    SUM(CASE WHEN WeekNo >= 6 THEN TARGET ELSE 0 END) AS W6_TARGET,
+    SUM(CASE WHEN WeekNo >= 6 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W6_ACTUAL
 FROM MonthData;
 """
 
@@ -269,11 +290,24 @@ SELECT
     SUM(CASE WHEN WeekNo = 4 THEN TARGET ELSE 0 END) AS W4_TARGET,
     SUM(CASE WHEN WeekNo = 4 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W4_ACTUAL,
 
-    SUM(CASE WHEN WeekNo >= 5 THEN TARGET ELSE 0 END) AS W5_TARGET,
-    SUM(CASE WHEN WeekNo >= 5 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W5_ACTUAL,
+    SUM(CASE WHEN WeekNo = 5 THEN TARGET ELSE 0 END) AS W5_TARGET,
+    SUM(CASE WHEN WeekNo = 5 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W5_ACTUAL,
+
+    SUM(CASE WHEN WeekNo >= 6 THEN TARGET ELSE 0 END) AS W6_TARGET,
+    SUM(CASE WHEN WeekNo >= 6 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W6_ACTUAL,
 
     -- Monthly
-    SUM(TARGET) AS MONTHLY_TARGET,
+    ISNULL
+    (
+        (
+            SELECT TOP 1 TargetQty
+            FROM dbo.{DbName}
+            WHERE TargetDate IS NOT NULL
+              AND YEAR(TargetDate) = YEAR(@ReportDate)
+              AND MONTH(TargetDate) = MONTH(@ReportDate)
+        ),
+        0
+    ) AS MONTHLY_TARGET,
     SUM(CASE WHEN ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS MONTHLY_ACTUAL,
 
     -- Previous Financial Year
@@ -296,12 +330,16 @@ SELECT
     ) AS ACTUAL_PREVIOUS_FINANCIAL_YEAR,
 
     -- MTD (Month To Date)
+    ISNULL
     (
-        SELECT ISNULL(SUM(TARGET),0)
-        FROM FinalData FD
-        WHERE FD.ReportDate BETWEEN
-              DATEFROMPARTS(YEAR(@ReportDate),MONTH(@ReportDate),1)
-              AND @ReportDate
+        (
+            SELECT TOP 1 TargetQty
+            FROM dbo.{DbName}
+            WHERE TargetDate IS NOT NULL
+              AND YEAR(TargetDate) = YEAR(@ReportDate)
+              AND MONTH(TargetDate) = MONTH(@ReportDate)
+        ),
+        0
     ) AS MTD_TARGET,
 
     (
@@ -324,7 +362,11 @@ SELECT
     ) AS YTD_ACTUAL,
 
     -- Auto Detect Month Days (28/29/30/31)
-    DAY(EOMONTH(@ReportDate)) AS DAYS_IN_MONTH
+    DAY(EOMONTH(@ReportDate)) AS DAYS_IN_MONTH,
+
+    -- W6 (Yearly Week 6)
+    SUM(CASE WHEN WeekNo >= 6 THEN TARGET ELSE 0 END) AS W6_TARGET,
+    SUM(CASE WHEN WeekNo >= 6 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W6_ACTUAL
 FROM MonthData;
 """
 

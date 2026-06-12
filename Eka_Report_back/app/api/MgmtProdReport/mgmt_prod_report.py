@@ -77,6 +77,15 @@ def generate_mgmt_production_report(
                 detail=f"Invalid date format. Expected YYYY-MM-DD. Error: {str(val_err)}"
             )
 
+        # Calculate 6 consecutive Yearly Weeks for the month starting from the first week (G9 to L9, columns 7 to 12)
+        first_day = report_date.replace(day=1)
+        first_monday = first_day - datetime.timedelta(days=first_day.weekday())
+        weekly_headers = []
+        for i in range(6):
+            week_date = first_monday + datetime.timedelta(days=7 * i)
+            iso_year, iso_week, iso_weekday = week_date.isocalendar()
+            weekly_headers.append(f"W{iso_week}")
+
 
         # 2. Query Holidays
         cursor = conn.cursor()
@@ -118,14 +127,27 @@ def generate_mgmt_production_report(
         # 6. Load Excel template and populate sheets
         wb = openpyxl.load_workbook(TEMPLATE_PATH)
 
-  
+        def get_sheet(workbook, name):
+            if name not in workbook.sheetnames:
+                return None
+            sheet = workbook[name]
+            orig_cell = sheet.cell
+            def safe_cell(*args, **kwargs):
+                cell = orig_cell(*args, **kwargs)
+                if type(cell).__name__ == 'MergedCell':
+                    for r in sheet.merged_cells.ranges:
+                        if cell.coordinate in r:
+                            return orig_cell(row=r.min_row, column=r.min_col)
+                return cell
+            sheet.cell = safe_cell
+            return sheet
 
         # G. Update Date & Time and date formatting in summary sheets
         current_date = datetime.date.today()
         current_time = datetime.datetime.now().time()
         for sname in ["Manag Report", "PLC Work"]:
-            if sname in wb.sheetnames:
-                ws = wb[sname]
+            ws = get_sheet(wb, sname)
+            if ws is not None:
                 ws.cell(row=4, column=2).value = current_date.strftime("%d-%m-%Y")
                 ws.cell(row=5, column=2).value = current_time
                 
@@ -133,6 +155,13 @@ def generate_mgmt_production_report(
                 cell_e9 = ws.cell(row=9, column=5)
                 cell_e9.number_format = '@'
                 cell_e9.value = report_date.strftime("%b %Y")
+
+                # Update G9 to L9 with Yearly Week
+                for i, w_header in enumerate(weekly_headers[:6]):
+                    cell_w = ws.cell(row=9, column=7 + i)
+                    if type(cell_w).__name__ != 'MergedCell':
+                        cell_w.number_format = '@'
+                        cell_w.value = w_header
 
                 # Update E15 (Monthly: Short month name - YYYY, e.g. Jan 2026)
                 cell_e15 = ws.cell(row=15, column=5)
@@ -542,8 +571,8 @@ def generate_mgmt_production_report(
                 cell_D18.value = safe_int(rows3[0][16])
 
                 # A. Populate Line Stop Daily & Monthly in 'Line Stop_Prod Loss' sheet
-                if "Line Stop_Prod Loss" in wb.sheetnames:
-                    ws_ls = wb["Line Stop_Prod Loss"]
+                ws_ls = get_sheet(wb, "Line Stop_Prod Loss")
+                if ws_ls is not None:
                     
                     # 1. Daily line stops mapping
                     daily_row_mapping = {
@@ -694,8 +723,8 @@ def generate_mgmt_production_report(
                                 ws_ls.cell(row=r, column=col_idx).value = None
 
                 # B. Populate Cargo Main/Sub, Chassis Line Loss Reason and Remarks in 'Manag Report' sheet
-                if "Manag Report" in wb.sheetnames:
-                    ws_man = wb["Manag Report"]
+                ws_man = get_sheet(wb, "Manag Report")
+                if ws_man is not None:
                     
                     # Map Cargo Main/Sub and Chassis details for Daily section in Manag Report (rows 48-52)
                     man_row_mapping = {

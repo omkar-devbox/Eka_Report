@@ -9,6 +9,7 @@ $FrontendDir = Join-Path $WorkspaceRoot "Eka_Report_front"
 $BackendDir = Join-Path $WorkspaceRoot "Eka_Report_back"
 $FrontendDist = Join-Path $FrontendDir "dist"
 $BackendVenv = Join-Path $BackendDir "venv"
+$PythonExe = Join-Path $BackendVenv "Scripts\python.exe"
 $PyInstallerExe = Join-Path $BackendVenv "Scripts\pyinstaller.exe"
 
 # ==========================================
@@ -16,15 +17,21 @@ $PyInstallerExe = Join-Path $BackendVenv "Scripts\pyinstaller.exe"
 # ==========================================
 Write-Host "`nChecking for running instances of EkaReportStudio.exe..." -ForegroundColor Cyan
 
-# 1. Kill EkaReportStudio.exe process to release file locks
-$RunningProcesses = Get-Process -Name "EkaReportStudio" -ErrorAction SilentlyContinue
+# 1. Kill EkaReportStudio.exe and EkaReportStudioSetup.exe processes to release file locks
+$RunningProcesses = Get-Process -Name "EkaReportStudio", "EkaReportStudioSetup" -ErrorAction SilentlyContinue
 if ($RunningProcesses) {
-    Write-Host "⚠️ Found running instances of EkaReportStudio.exe. Terminating processes to release file locks..." -ForegroundColor Yellow
-    Stop-Process -Name "EkaReportStudio" -Force
+    Write-Host "⚠️ Found running instances of EkaReportStudio or EkaReportStudioSetup. Terminating processes to release file locks..." -ForegroundColor Yellow
+    Stop-Process -Name "EkaReportStudio", "EkaReportStudioSetup" -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 1.5
     Write-Host "✅ Processes terminated." -ForegroundColor Gray
 } else {
-    Write-Host "✅ No running processes of EkaReportStudio.exe found." -ForegroundColor Gray
+    Write-Host "✅ No running processes of EkaReportStudio.exe or EkaReportStudioSetup.exe found." -ForegroundColor Gray
+}
+
+# Clean up old setup file if exists
+$OldSetup = Join-Path $BackendDir "dist\EkaReportStudioSetup.exe"
+if (Test-Path $OldSetup) {
+    Remove-Item -Path $OldSetup -Force -ErrorAction SilentlyContinue
 }
 
 # 2. Free up Port 8000 if blocked by active python/uvicorn servers
@@ -62,11 +69,11 @@ if (-not (Test-Path $BackendVenv)) {
     Set-Location $BackendDir
     python -m venv venv
     Write-Host "Installing backend requirements..." -ForegroundColor Gray
-    & (Join-Path $BackendVenv "Scripts\pip.exe") install -r (Join-Path $BackendDir "requirements.txt")
-    & (Join-Path $BackendVenv "Scripts\pip.exe") install openpyxl pyinstaller
+    & $PythonExe -m pip install -r (Join-Path $BackendDir "requirements.txt")
+    & $PythonExe -m pip install openpyxl pyinstaller
 } elseif (-not (Test-Path $PyInstallerExe)) {
     Write-Host "⚠️ PyInstaller is missing from the virtual environment! Installing now..." -ForegroundColor Yellow
-    & (Join-Path $BackendVenv "Scripts\pip.exe") install pyinstaller openpyxl
+    & $PythonExe -m pip install pyinstaller openpyxl
 } else {
     Write-Host "✅ Backend virtual environment and PyInstaller present." -ForegroundColor Gray
 }
@@ -99,7 +106,7 @@ Set-Location $BackendDir
 Write-Host "DEBUG: PyInstaller path is '$PyInstallerExe'" -ForegroundColor Yellow
 Write-Host "DEBUG: Test-Path result is: $(Test-Path $PyInstallerExe)" -ForegroundColor Yellow
 $IconPath = Join-Path $BackendDir "eka_logo.ico"
-& $PyInstallerExe --noconfirm --onedir --noconsole `
+& $PythonExe -m PyInstaller --noconfirm --onedir --noconsole `
     --name "EkaReportStudio" `
     --icon "$IconPath" `
     --add-data "$FrontendDist;dist" `
@@ -117,6 +124,8 @@ $IconPath = Join-Path $BackendDir "eka_logo.ico"
     --hidden-import "sqlite3" `
     --hidden-import "webview" `
     --hidden-import "clr" `
+    --hidden-import "jose" `
+    --hidden-import "passlib.handlers.bcrypt" `
     "run.py"
 
 if ($LASTEXITCODE -ne 0) {
