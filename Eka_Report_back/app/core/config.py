@@ -33,6 +33,16 @@ class Settings(BaseSettings):
     HOST: str = "127.0.0.1"
     PORT: int = 8000
 
+    # JWT Auth
+    JWT_SECRET_KEY: str = "change-me-in-production-use-a-long-random-secret"
+    JWT_REFRESH_SECRET_KEY: str = "change-me-refresh-secret-also-long-and-random"
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    # SQLite Auth DB (relative to BASE_DIR)
+    AUTH_DB_NAME: str = "auth.db"
+
     # SQL Server
     DB_SERVER: str = "localhost"
     DB_DATABASE: str = ""

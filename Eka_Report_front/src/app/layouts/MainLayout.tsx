@@ -1,24 +1,56 @@
-import { useState, lazy, Suspense } from "react";
-import { Outlet, useLocation, NavLink } from "react-router-dom";
+import { useState } from "react";
+import { Outlet, useLocation, NavLink, useNavigate } from "react-router-dom";
 import { AnimatePresence, m } from "framer-motion";
-import {
-  Search,
-  User,
-  Sparkles,
-  LogOut,
-} from "lucide-react";
+import { User, LogOut } from "lucide-react";
+import { useAuthStore } from "@/shared/lib/store/authStore";
+import { bindAuthStore } from "../api/api-client";
+
+const BASE_URL =
+  import.meta.env.DEV
+    ? import.meta.env.VITE_API_URL || "http://localhost:8000"
+    : "";
 
 export const MainLayout = () => {
-  const [isAiOpen, setIsAiOpen] = useState(false);
   const location = useLocation();
-  const currentUser = {
-    name: "Omkar S.",
-    email: "omkar@eka.com",
-    roles: ["Admin"],
-  };
+  const navigate = useNavigate();
 
-  const logout = () => {
-    console.log("Logout triggered");
+  const user = useAuthStore((s) => s.user);
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const clearAuth = useAuthStore((s) => s.clearAuth);
+  const setAccessToken = useAuthStore((s) => s.setAccessToken);
+
+  // Bind the store to the api-client so it can inject Bearer tokens and
+  // call clearAuth on refresh failure, without circular imports.
+  bindAuthStore({ accessToken, setAccessToken, clearAuth });
+
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const initials = user?.full_name
+    ? user.full_name
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : "??";
+
+  const displayName = user?.full_name ?? user?.username ?? "Unknown";
+  const displayRole = user?.role ?? "viewer";
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await fetch(`${BASE_URL}/api/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {
+      // Ignore network errors — still log out locally
+    } finally {
+      clearAuth();
+      navigate("/login", { replace: true });
+      setIsLoggingOut(false);
+    }
   };
 
   return (
@@ -99,27 +131,37 @@ export const MainLayout = () => {
         </div>
 
         <div className="flex items-center gap-3">
-
-
           <div className="h-8 w-px bg-border" />
-          <div
-            onClick={logout}
-            className="flex items-center gap-3 pl-2 cursor-pointer group hover:bg-error/5 p-1 rounded-lg transition-all"
+
+          {/* User + Logout */}
+          <button
+            id="logout-btn"
+            type="button"
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="flex items-center gap-3 pl-2 cursor-pointer group hover:bg-error/5 p-1 rounded-lg transition-all disabled:opacity-60"
             title="Logout"
           >
             <div className="hidden text-right sm:block">
               <p className="text-sm font-semibold text-text-primary group-hover:text-primary transition-colors">
-                {currentUser.name}
+                {displayName}
               </p>
-              <p className="text-xs text-text-secondary">
-                {currentUser.roles.join(", ")}
-              </p>
+              <p className="text-xs text-text-secondary capitalize">{displayRole}</p>
             </div>
             <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 text-primary group-hover:bg-error/10 group-hover:text-error group-hover:border-error/20 transition-all">
-              <User size={18} className="group-hover:hidden" />
-              <LogOut size={18} className="hidden group-hover:block" />
+              {isLoggingOut ? (
+                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                <>
+                  <span className="text-xs font-bold group-hover:hidden">{initials}</span>
+                  <LogOut size={16} className="hidden group-hover:block" />
+                </>
+              )}
             </div>
-          </div>
+          </button>
         </div>
       </header>
 
