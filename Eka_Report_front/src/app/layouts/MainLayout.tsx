@@ -127,6 +127,19 @@ export const MainLayout = () => {
             >
               Settings
             </NavLink>
+            {displayRole === "admin" && (
+              <NavLink
+                to="/admin"
+                className={({ isActive }) =>
+                  `px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${isActive
+                    ? "bg-primary/10 text-primary"
+                    : "text-text-secondary hover:text-text-primary hover:bg-neutral-surface/40"
+                  }`
+                }
+              >
+                Admin
+              </NavLink>
+            )}
           </nav>
         </div>
 

@@ -2,7 +2,7 @@ import { Suspense, lazy } from "react";
 import { Route, Routes } from "react-router-dom";
 import { MainLayout } from "../layouts/MainLayout";
 import { Loading } from "../../shared/ui/loading";
-import { ProtectedRoute, PublicRoute } from "./AuthRoutes";
+import { ProtectedRoute, PublicRoute, AdminRoute } from "./AuthRoutes";
 
 // Lazy load feature pages
 const Dashboard = lazy(() => import("@/features/pages/Dashboard"));
@@ -11,6 +11,7 @@ const AnalyticsPage = lazy(() => import("@/features/pages/Analytics"));
 const SchedulesPage = lazy(() => import("@/features/pages/Schedules"));
 const SettingsPage = lazy(() => import("@/features/pages/Settings"));
 const LoginPage = lazy(() => import("@/features/pages/Login"));
+const AdminPage = lazy(() => import("@/features/pages/Admin"));
 
 export const AppRouter = () => {
   return (
@@ -33,6 +34,13 @@ export const AppRouter = () => {
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/schedules" element={<SchedulesPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+          </Route>
+        </Route>
+
+        {/* Admin-only routes */}
+        <Route element={<AdminRoute />}>
+          <Route element={<MainLayout />}>
+            <Route path="/admin" element={<AdminPage />} />
           </Route>
         </Route>
 
