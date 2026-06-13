@@ -10,6 +10,7 @@ const Overview = lazy(() => import("@/features/pages/Overview"));
 const AnalyticsPage = lazy(() => import("@/features/pages/Analytics"));
 const SchedulesPage = lazy(() => import("@/features/pages/Schedules"));
 const SettingsPage = lazy(() => import("@/features/pages/Settings"));
+const ChassisLossReportPage = lazy(() => import("@/features/pages/ChassisLossReport"));
 const LoginPage = lazy(() => import("@/features/pages/Login"));
 const RegisterPage = lazy(() => import("@/features/pages/Register"));
 const AdminPage = lazy(() => import("@/features/pages/Admin"));
@@ -36,6 +37,7 @@ export const AppRouter = () => {
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route path="/schedules" element={<SchedulesPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/chassis-loss-report" element={<ChassisLossReportPage />} />
           </Route>
         </Route>
 

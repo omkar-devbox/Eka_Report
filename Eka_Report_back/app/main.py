@@ -11,6 +11,7 @@ from app.api.endpoints import auth
 from app.api.endpoints import admin
 from app.api.MgmtProdReport import mgmt_prod_report
 from app.api.ProdReportType2 import prod_report_type2
+from app.api.ChassisLossReport import chassis_loss_report
 
 # Explicitly register JavaScript and CSS MIME types to prevent Windows Registry overrides
 mimetypes.add_type("application/javascript", ".js", True)
@@ -47,6 +48,7 @@ app.include_router(auth.router)
 app.include_router(admin.router)
 app.include_router(mgmt_prod_report.router, prefix="/api", tags=["Reports"])
 app.include_router(prod_report_type2.router, prefix="/api", tags=["Reports"])
+app.include_router(chassis_loss_report.router, prefix="/api", tags=["Reports"])
 
 
 def get_frontend_dist_path():

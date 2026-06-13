@@ -84,6 +84,17 @@ export const MainLayout = () => {
               Dashboard
             </NavLink>
             <NavLink
+              to="/chassis-loss-report"
+              className={({ isActive }) =>
+                `px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${isActive
+                  ? "bg-primary/10 text-primary"
+                  : "text-text-secondary hover:text-text-primary hover:bg-neutral-surface/40"
+                }`
+              }
+            >
+              Chassis Loss
+            </NavLink>
+            <NavLink
               to="/overview"
               className={({ isActive }) =>
                 `px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${isActive
