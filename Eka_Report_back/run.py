@@ -8,6 +8,7 @@ import subprocess
 
 # Track start time to prevent infinite restart loops on persistent startup errors
 START_TIME = time.time()
+APP_EXITING = False
 
 # Ensure backend directory is in path when running from arbitrary directories
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -47,6 +48,8 @@ def wait_for_server(host, port, timeout=30):
 
 def restart_application():
     """Relaunches the current application and exits."""
+    if APP_EXITING:
+        return
     uptime = time.time() - START_TIME
     # If the app crashed in under 10 seconds, avoid infinite loop restarts
     if uptime < 10.0:
@@ -70,7 +73,11 @@ def monitor_server(server_thread):
     # Give the server a few seconds to start up
     time.sleep(10.0)
     while True:
+        if APP_EXITING:
+            break
         if not server_thread.is_alive():
+            if APP_EXITING:
+                break
             print("Backend server thread terminated unexpectedly!")
             restart_application()
         time.sleep(2.0)
@@ -100,16 +107,26 @@ if __name__ == "__main__":
             url = f"http://{host}:{settings.PORT}"
             
             # Open in a dedicated application window using Edge/WebView2 via pywebview
-            webview.create_window(
+            window = webview.create_window(
                 title="Eka Report Studio",
                 url=url,
                 width=1280,
                 height=800,
                 min_size=(800, 600)
             )
+            
+            def on_closed():
+                global APP_EXITING
+                APP_EXITING = True
+                print("GUI window closed by user. Shutting down server and exiting process...")
+                os._exit(0)
+                
+            window.events.closed += on_closed
+            
             webview.start()
             
             # Ensure normal shutdown when GUI window is closed by the user
+            APP_EXITING = True
             os._exit(0)
         except Exception as e:
             print(f"GUI crash or runtime error: {e}")

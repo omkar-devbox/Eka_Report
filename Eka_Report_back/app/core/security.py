@@ -3,6 +3,7 @@ from typing import Any
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+import passlib.handlers.bcrypt  # Explicit import for PyInstaller packaging
 from fastapi import HTTPException, status
 
 from app.core.config import settings

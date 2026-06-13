@@ -126,6 +126,8 @@ $IconPath = Join-Path $BackendDir "eka_logo.ico"
     --hidden-import "clr" `
     --hidden-import "jose" `
     --hidden-import "passlib.handlers.bcrypt" `
+    --hidden-import "PIL" `
+    --hidden-import "PIL.Image" `
     "run.py"
 
 if ($LASTEXITCODE -ne 0) {

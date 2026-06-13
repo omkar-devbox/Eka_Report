@@ -12,14 +12,16 @@ from app.core.database import get_db_connection
 from app.schemas.mgmt_prod_report import ProdReportType2Request, OpenFileRequest
 from app.constant.queris import (
     SaarthiMickyReportTCFBIW,
-    LineStopRecordDaily,
-    LineStopRecordMonthly
+    LineStopRecordDaily
 )
 
 router = APIRouter()
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 TEMPLATE_PATH = BASE_DIR / "ProductionReport_R3.xlsx"
+# Note: Ensure the 'pillow' library is installed in the python environment.
+# openpyxl requires PIL/pillow to read and write Excel drawings/images;
+# otherwise, they will be silently dropped during wb.save().
 # OUTPUT_PATH will be defined dynamically after parsing dates
 
 
@@ -115,8 +117,22 @@ def generate_mgmt_production_report(
         cursor.execute(LineStopRecordDaily(payload.ReportDate))
         rows4 = cursor.fetchall()
 
-        cursor.execute(LineStopRecordMonthly(payload.ReportDate))
-        rows5 = cursor.fetchall()
+        # Guard: ensure all queries returned at least one row
+        empty_queries = []
+        if not rows0:
+            empty_queries.append("S_TCF")
+        if not rows1:
+            empty_queries.append("M_TCF")
+        if not rows2:
+            empty_queries.append("S_BIW")
+        if not rows3:
+            empty_queries.append("M_BIW")
+        if empty_queries:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No data found for the selected date/shift in tables: {', '.join(empty_queries)}. "
+                       f"Please verify that records exist for ReportDate={payload.ReportDate}, Shift={payload.Shift}."
+            )
 
         # Load Excel template and populate sheets
         wb = openpyxl.load_workbook(TEMPLATE_PATH)
@@ -527,8 +543,49 @@ def generate_mgmt_production_report(
                     # Col 19 (S): Remark (row[10])
                     ws_prod.cell(row=r, column=19).value = row[10]
 
-        # 7. Save and return workbook
+        # 7. Save workbook
         wb.save(output_path)
+
+        # 8. Send report email if provided
+        if payload.Email and payload.Email.strip():
+            try:
+                from app.core.settings_db import get_smtp_settings
+                from app.core.mailer import send_report_email
+                
+                smtp_info = get_smtp_settings()
+                subject_template = smtp_info.get("subject_template", "[Eka Studio] {ReportType} - {Date}")
+                body_template = smtp_info.get("body_template", "Please find attached the compiled {ReportType} for {Date} (Shift: {Shift}).")
+                
+                report_desc = "Production Report (R3)"
+                
+                def resolve_placeholders(text: str) -> str:
+                    if not text:
+                        return ""
+                    return (
+                        text.replace("{Date}", report_date.strftime("%b %d, %Y"))
+                        .replace("{ReportType}", report_desc)
+                        .replace("{Shift}", payload.Shift)
+                        .replace("{UserName}", "Eka Report Studio")
+                    )
+                    
+                subject = resolve_placeholders(subject_template)
+                body = resolve_placeholders(body_template)
+                
+                # Split by comma in case of multiple recipients
+                recipients = [email.strip() for email in payload.Email.split(",") if email.strip()]
+                if recipients:
+                    send_report_email(
+                        recipients=recipients,
+                        subject=subject,
+                        body=body,
+                        attachment_path=str(output_path),
+                        attachment_name=output_path.name
+                    )
+            except Exception as mail_err:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Report generated successfully but failed to send email: {str(mail_err)}"
+                )
 
         return {
             "status": "success",

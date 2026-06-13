@@ -24,6 +24,9 @@ router = APIRouter()
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 TEMPLATE_PATH = BASE_DIR / "MProductionReport.xlsx"
+# Note: Ensure the 'pillow' library is installed in the python environment.
+# openpyxl requires PIL/pillow to read and write Excel drawings/images;
+# otherwise, they will be silently dropped during wb.save().
 # OUTPUT_PATH will be defined dynamically after parsing dates
 
 
@@ -799,8 +802,49 @@ def generate_mgmt_production_report(
                                 ws_man.cell(row=r, column=8).value = row[8]
 
             
-        # 7. Save and return workbook
+        # 7. Save workbook
         wb.save(output_path)
+
+        # 8. Send report email if provided
+        if payload.Email and payload.Email.strip():
+            try:
+                from app.core.settings_db import get_smtp_settings
+                from app.core.mailer import send_report_email
+                
+                smtp_info = get_smtp_settings()
+                subject_template = smtp_info.get("subject_template", "[Eka Studio] {ReportType} - {Date}")
+                body_template = smtp_info.get("body_template", "Please find attached the compiled {ReportType} for {Date} (Shift: {Shift}).")
+                
+                report_desc = "Management Report (R2)"
+                
+                def resolve_placeholders(text: str) -> str:
+                    if not text:
+                        return ""
+                    return (
+                        text.replace("{Date}", report_date.strftime("%b %d, %Y"))
+                        .replace("{ReportType}", report_desc)
+                        .replace("{Shift}", payload.Shift)
+                        .replace("{UserName}", "Eka Report Studio")
+                    )
+                    
+                subject = resolve_placeholders(subject_template)
+                body = resolve_placeholders(body_template)
+                
+                # Split by comma in case of multiple recipients
+                recipients = [email.strip() for email in payload.Email.split(",") if email.strip()]
+                if recipients:
+                    send_report_email(
+                        recipients=recipients,
+                        subject=subject,
+                        body=body,
+                        attachment_path=str(output_path),
+                        attachment_name=output_path.name
+                    )
+            except Exception as mail_err:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Report generated successfully but failed to send email: {str(mail_err)}"
+                )
 
         return {
             "status": "success",

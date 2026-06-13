@@ -1,10 +1,10 @@
-def SaarthiMickyReportTCFBIW(ReportDate, StartDate, LastDate, Shift="All",DbName="") -> str:
-    return f""" 
+def SaarthiMickyReportTCFBIW(ReportDate, StartDate, LastDate, Shift="All", DbName="") -> str:
+    return f"""
 DECLARE @ReportDate DATE = '{ReportDate}';
 DECLARE @StartDate  DATE = '{StartDate}';
 DECLARE @LastDate   DATE = '{LastDate}';
 
-SET DATEFIRST 7; -- Sunday
+SET DATEFIRST 7;
 
 WITH LatestData AS
 (
@@ -13,10 +13,10 @@ WITH LatestData AS
         CAST(DT AS DATE) AS ReportDate,
         TARGET,
         ACTUAL,
+        TargetQty,
         ROW_NUMBER() OVER
         (
-            PARTITION BY
-                CAST(DT AS DATE)
+            PARTITION BY CAST(DT AS DATE)
             ORDER BY DT DESC
         ) AS RN
     FROM dbo.{DbName}
@@ -24,12 +24,13 @@ WITH LatestData AS
 FinalData AS
 (
     SELECT
-        LD.DT,
-        LD.ReportDate,
-        LD.TARGET,
-        LD.ACTUAL
-    FROM LatestData LD
-    WHERE LD.RN = 1
+        DT,
+        ReportDate,
+        TARGET,
+        ACTUAL,
+        TargetQty
+    FROM LatestData
+    WHERE RN = 1
 ),
 MonthData AS
 (
@@ -37,6 +38,7 @@ MonthData AS
         ReportDate,
         TARGET,
         ACTUAL,
+        TargetQty,
         (
             (
                 DAY(ReportDate)
@@ -90,194 +92,6 @@ SELECT
         0
     ) AS DAILY_ACTUAL,
 
-    -- Weekly
-   -- Weekly
-SUM(CASE WHEN WeekNo = 1 THEN TARGET ELSE 0 END) AS W1_TARGET,
-SUM(CASE WHEN WeekNo = 1 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W1_ACTUAL,
-
-SUM(CASE WHEN WeekNo = 2 THEN TARGET ELSE 0 END) AS W2_TARGET,
-SUM(CASE WHEN WeekNo = 2 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W2_ACTUAL,
-
-SUM(CASE WHEN WeekNo = 3 THEN TARGET ELSE 0 END) AS W3_TARGET,
-SUM(CASE WHEN WeekNo = 3 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W3_ACTUAL,
-
-SUM(CASE WHEN WeekNo = 4 THEN TARGET ELSE 0 END) AS W4_TARGET,
-SUM(CASE WHEN WeekNo = 4 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W4_ACTUAL,
-
-SUM(CASE WHEN WeekNo = 5 THEN TARGET ELSE 0 END) AS W5_TARGET,
-SUM(CASE WHEN WeekNo = 5 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W5_ACTUAL,
-
-SUM(CASE WHEN WeekNo >= 6 THEN TARGET ELSE 0 END) AS W6_TARGET,
-SUM(CASE WHEN WeekNo >= 6 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W6_ACTUAL,
-
-    -- Monthly
-    ISNULL
-    (
-        (
-            SELECT TOP 1 TargetQty
-            FROM dbo.{DbName}
-            WHERE TargetDate IS NOT NULL
-              AND YEAR(TargetDate) = YEAR(@ReportDate)
-              AND MONTH(TargetDate) = MONTH(@ReportDate)
-        ),
-        0
-    ) AS MONTHLY_TARGET,
-    SUM(CASE WHEN ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS MONTHLY_ACTUAL,
-
-    -- Previous Financial Year
-    (
-        SELECT ISNULL(SUM(TARGET),0)
-        FROM FinalData FD
-        WHERE FD.ReportDate BETWEEN
-              DATEADD(YEAR,-1,@StartDate)
-              AND
-              DATEADD(YEAR,-1,@LastDate)
-    ) AS TARGET_PREVIOUS_FINANCIAL_YEAR,
-
-    (
-        SELECT ISNULL(SUM(ACTUAL),0)
-        FROM FinalData FD
-        WHERE FD.ReportDate BETWEEN
-              DATEADD(YEAR,-1,@StartDate)
-              AND
-              DATEADD(YEAR,-1,@LastDate)
-    ) AS ACTUAL_PREVIOUS_FINANCIAL_YEAR,
-
-    -- MTD (Month To Date)
-    ISNULL
-    (
-        (
-            SELECT TOP 1 TargetQty
-            FROM dbo.{DbName}
-            WHERE TargetDate IS NOT NULL
-              AND YEAR(TargetDate) = YEAR(@ReportDate)
-              AND MONTH(TargetDate) = MONTH(@ReportDate)
-        ),
-        0
-    ) AS MTD_TARGET,
-
-    (
-        SELECT ISNULL(SUM(ACTUAL),0)
-        FROM FinalData FD
-        WHERE FD.ReportDate BETWEEN
-              DATEFROMPARTS(YEAR(@ReportDate),MONTH(@ReportDate),1)
-              AND @ReportDate
-    ) AS MTD_ACTUAL,
-     (
-        SELECT ISNULL(SUM(TARGET),0)
-        FROM FinalData FD
-        WHERE FD.ReportDate BETWEEN @StartDate AND @ReportDate
-    ) AS YTD_TARGET,
-
-    (
-        SELECT ISNULL(SUM(ACTUAL),0)
-        FROM FinalData FD
-        WHERE FD.ReportDate BETWEEN @StartDate AND @ReportDate
-    ) AS YTD_ACTUAL,
-
-    -- Auto Detect Month Days (28/29/30/31)
-    DAY(EOMONTH(@ReportDate)) AS DAYS_IN_MONTH,
-
-    -- W6 (Yearly Week 6)
-    SUM(CASE WHEN WeekNo >= 6 THEN TARGET ELSE 0 END) AS W6_TARGET,
-    SUM(CASE WHEN WeekNo >= 6 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W6_ACTUAL
-FROM MonthData;
-"""
-
-
-def SaarthiMickyReportTCFBIW1(ReportDate, StartDate, LastDate, Shift="All",DbName="") -> str:
-    return f""" 
-DECLARE @ReportDate DATE = '{ReportDate}';
-DECLARE @StartDate  DATE = '{StartDate}';
-DECLARE @LastDate   DATE = '{LastDate}';
-
-SET DATEFIRST 7; -- Sunday
-
-WITH LatestData AS
-(
-    SELECT
-        DT,
-        CAST(DT AS DATE) AS ReportDate,
-        TARGET,
-        ACTUAL,
-        ROW_NUMBER() OVER
-        (
-            PARTITION BY
-                CAST(DT AS DATE)
-            ORDER BY DT DESC
-        ) AS RN
-    FROM dbo.{DbName}
-),
-FinalData AS
-(
-    SELECT
-        LD.DT,
-        LD.ReportDate,
-        LD.TARGET,
-        LD.ACTUAL
-    FROM LatestData LD
-    WHERE LD.RN = 1
-),
-MonthData AS
-(
-    SELECT
-        ReportDate,
-        TARGET,
-        ACTUAL,
-        (
-            (
-                DAY(ReportDate)
-                + DATEPART
-                (
-                    WEEKDAY,
-                    DATEFROMPARTS
-                    (
-                        YEAR(ReportDate),
-                        MONTH(ReportDate),
-                        1
-                    )
-                )
-                - 2
-            ) / 7
-        ) + 1 AS WeekNo
-    FROM FinalData
-    WHERE YEAR(ReportDate) = YEAR(@ReportDate)
-      AND MONTH(ReportDate) = MONTH(@ReportDate)
-)
-
-SELECT
-    CONVERT
-    (
-        VARCHAR(23),
-        (
-            SELECT MAX(DT)
-            FROM FinalData
-            WHERE ReportDate = @ReportDate
-        ),
-        121
-    ) AS DT,
-
-    ISNULL
-    (
-        (
-            SELECT SUM(TARGET)
-            FROM FinalData
-            WHERE ReportDate = @ReportDate
-        ),
-        0
-    ) AS DAILY_TARGET,
-
-    ISNULL
-    (
-        (
-            SELECT SUM(ACTUAL)
-            FROM FinalData
-            WHERE ReportDate = @ReportDate
-        ),
-        0
-    ) AS DAILY_ACTUAL,
-
-    -- Weekly
     SUM(CASE WHEN WeekNo = 1 THEN TARGET ELSE 0 END) AS W1_TARGET,
     SUM(CASE WHEN WeekNo = 1 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W1_ACTUAL,
 
@@ -296,154 +110,83 @@ SELECT
     SUM(CASE WHEN WeekNo >= 6 THEN TARGET ELSE 0 END) AS W6_TARGET,
     SUM(CASE WHEN WeekNo >= 6 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W6_ACTUAL,
 
-    -- Monthly
     ISNULL
     (
+        MAX
         (
-            SELECT TOP 1 TargetQty
-            FROM dbo.{DbName}
-            WHERE TargetDate IS NOT NULL
-              AND YEAR(TargetDate) = YEAR(@ReportDate)
-              AND MONTH(TargetDate) = MONTH(@ReportDate)
+            CASE
+                WHEN ReportDate = @ReportDate
+                THEN TargetQty
+            END
         ),
         0
     ) AS MONTHLY_TARGET,
-    SUM(CASE WHEN ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS MONTHLY_ACTUAL,
 
-    -- Previous Financial Year
+    SUM
+    (
+        CASE
+            WHEN ReportDate <= @ReportDate
+            THEN ACTUAL
+            ELSE 0
+        END
+    ) AS MONTHLY_ACTUAL,
+
     (
         SELECT ISNULL(SUM(TARGET),0)
-        FROM FinalData FD
-        WHERE FD.ReportDate BETWEEN
-              DATEADD(YEAR,-1,@StartDate)
-              AND
-              DATEADD(YEAR,-1,@LastDate)
+        FROM FinalData
+        WHERE ReportDate BETWEEN DATEADD(YEAR,-1,@StartDate)
+                            AND DATEADD(YEAR,-1,@LastDate)
     ) AS TARGET_PREVIOUS_FINANCIAL_YEAR,
 
     (
         SELECT ISNULL(SUM(ACTUAL),0)
-        FROM FinalData FD
-        WHERE FD.ReportDate BETWEEN
-              DATEADD(YEAR,-1,@StartDate)
-              AND
-              DATEADD(YEAR,-1,@LastDate)
+        FROM FinalData
+        WHERE ReportDate BETWEEN DATEADD(YEAR,-1,@StartDate)
+                            AND DATEADD(YEAR,-1,@LastDate)
     ) AS ACTUAL_PREVIOUS_FINANCIAL_YEAR,
 
-    -- MTD (Month To Date)
-    ISNULL
     (
-        (
-            SELECT TOP 1 TargetQty
-            FROM dbo.{DbName}
-            WHERE TargetDate IS NOT NULL
-              AND YEAR(TargetDate) = YEAR(@ReportDate)
-              AND MONTH(TargetDate) = MONTH(@ReportDate)
-        ),
-        0
+        SELECT ISNULL(SUM(TARGET),0)
+        FROM FinalData
+        WHERE ReportDate BETWEEN DATEFROMPARTS
+                                (
+                                    YEAR(@ReportDate),
+                                    MONTH(@ReportDate),
+                                    1
+                                )
+                            AND @ReportDate
     ) AS MTD_TARGET,
 
     (
         SELECT ISNULL(SUM(ACTUAL),0)
-        FROM FinalData FD
-        WHERE FD.ReportDate BETWEEN
-              DATEFROMPARTS(YEAR(@ReportDate),MONTH(@ReportDate),1)
-              AND @ReportDate
+        FROM FinalData
+        WHERE ReportDate BETWEEN DATEFROMPARTS
+                                (
+                                    YEAR(@ReportDate),
+                                    MONTH(@ReportDate),
+                                    1
+                                )
+                            AND @ReportDate
     ) AS MTD_ACTUAL,
-     (
+
+    (
         SELECT ISNULL(SUM(TARGET),0)
-        FROM FinalData FD
-        WHERE FD.ReportDate BETWEEN @StartDate AND @ReportDate
+        FROM FinalData
+        WHERE ReportDate BETWEEN @StartDate
+                            AND @ReportDate
     ) AS YTD_TARGET,
 
     (
         SELECT ISNULL(SUM(ACTUAL),0)
-        FROM FinalData FD
-        WHERE FD.ReportDate BETWEEN @StartDate AND @ReportDate
+        FROM FinalData
+        WHERE ReportDate BETWEEN @StartDate
+                            AND @ReportDate
     ) AS YTD_ACTUAL,
 
-    -- Auto Detect Month Days (28/29/30/31)
-    DAY(EOMONTH(@ReportDate)) AS DAYS_IN_MONTH,
+    DAY(EOMONTH(@ReportDate)) AS DAYS_IN_MONTH
 
-    -- W6 (Yearly Week 6)
-    SUM(CASE WHEN WeekNo >= 6 THEN TARGET ELSE 0 END) AS W6_TARGET,
-    SUM(CASE WHEN WeekNo >= 6 AND ReportDate <= @ReportDate THEN ACTUAL ELSE 0 END) AS W6_ACTUAL
 FROM MonthData;
 """
-
-
-def SaarthiMickyWeekwiseMonthly(ReportDate, Shift="All", DbName="") -> str:
-    """
-    Fetches production data aggregated by ISO calendar week for a given month of ReportDate.
-    Result columns: ISOWeek, WK_TARGET, WK_ACTUAL.
-    """
-    shift_filter = ""
-    if Shift != "All":
-        shift_filter = f"AND LTRIM(RTRIM(LD.Shift)) = '{Shift}'"
-    else:
-        shift_filter = f"""AND
-      (
-            LD.Shift IS NOT NULL
-
-            OR
-
-            (
-                LD.Shift IS NULL
-                AND NOT EXISTS
-                (
-                    SELECT 1
-                    FROM dbo.{DbName} T
-                    WHERE CAST(T.DT AS DATE) = LD.ReportDate
-                      AND T.Shift IS NOT NULL
-                )
-            )
-      )"""
-
-    return f"""
-DECLARE @ReportDate DATE = '{ReportDate}';
-
-SET DATEFIRST 1; -- Monday (ISO 8601 week start)
-
-WITH LatestData AS
-(
-    SELECT
-        DT,
-        CAST(DT AS DATE) AS ReportDate,
-        Shift,
-        TARGET,
-        ACTUAL,
-        ROW_NUMBER() OVER
-        (
-            PARTITION BY
-                CAST(DT AS DATE),
-                ISNULL(CAST(Shift AS VARCHAR(50)), 'NO_SHIFT')
-            ORDER BY DT DESC
-        ) AS RN
-    FROM dbo.{DbName}
-),
-FinalData AS
-(
-    SELECT
-        LD.DT,
-        LD.ReportDate,
-        LD.Shift,
-        LD.TARGET,
-        LD.ACTUAL
-    FROM LatestData LD
-    WHERE LD.RN = 1
-      {shift_filter}
-)
-SELECT
-    DATEPART(ISO_WEEK, ReportDate)  AS ISOWeek,
-    ISNULL(SUM(TARGET), 0)         AS WK_TARGET,
-    ISNULL(SUM(ACTUAL), 0)         AS WK_ACTUAL
-FROM FinalData
-WHERE YEAR(ReportDate)  = YEAR(@ReportDate)
-  AND MONTH(ReportDate) = MONTH(@ReportDate)
-GROUP BY DATEPART(ISO_WEEK, ReportDate)
-ORDER BY ISOWeek;
-"""
-
-
 def LineStopRecordDaily(ReportDate) -> str:
     return f"""
 WITH CH AS
@@ -608,6 +351,7 @@ CASE A.TypeOfCallText
 END;
 """
 
+
 def LineStopRecordMonthly(ReportDate) -> str:
     return f"""
 SELECT
@@ -753,6 +497,7 @@ WHERE YEAR(ls.DT) = YEAR('{ReportDate}') AND MONTH(ls.DT) = MONTH('{ReportDate}'
 ORDER BY ls.DT ASC;
 """
 
+
 def ProductionLossDaily(ReportDate, Shift="All") -> str:
     shift_cond = ""
     if Shift != "All":
@@ -799,6 +544,7 @@ FROM LatestLoss
 WHERE RN = 1
 ORDER BY Shift ASC;
 """
+
 
 def ChassisLineStatus(ReportDate, Shift="All") -> str:
     PL_ShiftFilter = ""
@@ -911,5 +657,4 @@ LEFT JOIN ProdLoss PL ON 1=1
 ORDER BY S.StationNumber;
 """
 
-# ALTER TABLE [TRIM_PC].[dbo].[Production_Loss]
-# ADD StationNo INT NULL;
+
