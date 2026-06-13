@@ -11,6 +11,7 @@ const AnalyticsPage = lazy(() => import("@/features/pages/Analytics"));
 const SchedulesPage = lazy(() => import("@/features/pages/Schedules"));
 const SettingsPage = lazy(() => import("@/features/pages/Settings"));
 const LoginPage = lazy(() => import("@/features/pages/Login"));
+const RegisterPage = lazy(() => import("@/features/pages/Register"));
 const AdminPage = lazy(() => import("@/features/pages/Admin"));
 
 export const AppRouter = () => {
@@ -24,6 +25,7 @@ export const AppRouter = () => {
         {/* Public routes — redirect to "/" if already authenticated */}
         <Route element={<PublicRoute />}>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
         </Route>
 
         {/* Protected routes — redirect to "/login" if not authenticated */}

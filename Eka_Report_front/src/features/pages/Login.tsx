@@ -1,5 +1,5 @@
 import { useState, useId } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { m } from "framer-motion";
 import { Eye, EyeOff, LogIn, ShieldCheck } from "lucide-react";
 import { useAuthStore } from "@/shared/lib/store/authStore";
@@ -190,6 +190,16 @@ export default function Login() {
                 </>
               )}
             </m.button>
+
+            <div className="text-center mt-2">
+              <span className="text-xs text-text-secondary">Don't have an account? </span>
+              <Link
+                to="/register"
+                className="text-xs font-semibold text-primary hover:text-primary/80 transition-colors hover:underline"
+              >
+                Register here
+              </Link>
+            </div>
           </form>
 
           {/* Footer */}

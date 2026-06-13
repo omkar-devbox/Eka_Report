@@ -245,6 +245,20 @@ export default function Register() {
               />
             </div>
 
+            {/* Account Type / Role */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-text-secondary uppercase tracking-wider flex items-center gap-1.5">
+                <ShieldCheck size={13} className="text-text-muted" />
+                Account Type
+              </label>
+              <input
+                type="text"
+                disabled
+                value="Viewer"
+                className="w-full bg-bg/20 border border-sidebar-border/40 rounded-xl px-4 py-2.5 text-sm text-text-muted cursor-not-allowed font-medium select-none"
+              />
+            </div>
+
             {/* Submit */}
             <m.button
               type="submit"
