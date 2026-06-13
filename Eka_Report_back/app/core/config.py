@@ -43,6 +43,13 @@ class Settings(BaseSettings):
     # SQLite Auth DB (relative to BASE_DIR)
     AUTH_DB_NAME: str = "auth.db"
 
+    # SMTP Settings (loaded from .env)
+    SMTP_MAIL: str = "omkarregetest@gmail.com"
+    SMTP_PASS: str = "ucfzwkhdwivmumif"
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_SECURE: str = "tls"
+
     # SQL Server
     DB_SERVER: str = "localhost"
     DB_DATABASE: str = ""

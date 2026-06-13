@@ -9,6 +9,8 @@ from app.core.config import settings
 from app.api.endpoints import health
 from app.api.endpoints import auth
 from app.api.endpoints import admin
+from app.api.endpoints import smtp
+from app.api.endpoints import schedules
 from app.api.MgmtProdReport import mgmt_prod_report
 from app.api.ProdReportType2 import prod_report_type2
 from app.api.ChassisLossReport import chassis_loss_report
@@ -47,10 +49,17 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(admin.router)
+app.include_router(smtp.router)
+app.include_router(schedules.router)
 app.include_router(mgmt_prod_report.router, prefix="/api", tags=["Reports"])
 app.include_router(prod_report_type2.router, prefix="/api", tags=["Reports"])
 app.include_router(chassis_loss_report.router, prefix="/api", tags=["Reports"])
 app.include_router(trim_loss_report.router, prefix="/api", tags=["Reports"])
+
+@app.on_event("startup")
+def startup_event():
+    from app.core.scheduler import start_scheduler
+    start_scheduler()
 
 
 def get_frontend_dist_path():

@@ -22,7 +22,7 @@ def get_auth_db() -> sqlite3.Connection:
 
 
 def _create_tables(conn: sqlite3.Connection) -> None:
-    """Create auth tables if they do not exist."""
+    """Create auth, smtp, and schedules tables if they do not exist."""
     conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS users (
@@ -35,8 +35,78 @@ def _create_tables(conn: sqlite3.Connection) -> None:
             is_active       INTEGER NOT NULL DEFAULT 1,
             created_at      TEXT    DEFAULT (datetime('now'))
         );
+
+        CREATE TABLE IF NOT EXISTS smtp_settings (
+            id                INTEGER PRIMARY KEY CHECK (id = 1),
+            smtp_host         TEXT NOT NULL DEFAULT 'smtp.gmail.com',
+            smtp_port         INTEGER NOT NULL DEFAULT 587,
+            smtp_username     TEXT NOT NULL DEFAULT 'omkarregetest@gmail.com',
+            smtp_password     TEXT NOT NULL DEFAULT 'ucfzwkhdwivmumif',
+            smtp_secure       TEXT NOT NULL DEFAULT 'tls',
+            sender_email      TEXT NOT NULL DEFAULT 'omkarregetest@gmail.com',
+            sender_name       TEXT NOT NULL DEFAULT 'Eka Operations Hub',
+            subject_template  TEXT NOT NULL DEFAULT '[Eka Studio] {ReportType} - {Date}',
+            body_template     TEXT NOT NULL DEFAULT 'Dear Team,
+
+Please find attached the compiled {ReportType} for the date {Date} (Shift: {Shift}).
+
+This is an automated dispatch from Eka Report Studio. Please do not reply directly to this email.
+
+Best Regards,
+Eka Operations Hub'
+        );
+
+        CREATE TABLE IF NOT EXISTS schedules (
+            id            TEXT PRIMARY KEY,
+            name          TEXT NOT NULL,
+            report_type   TEXT NOT NULL,
+            recipients    TEXT NOT NULL,
+            frequency     TEXT NOT NULL,
+            days          TEXT,
+            time          TEXT NOT NULL,
+            active        INTEGER NOT NULL DEFAULT 1,
+            last_run      TEXT DEFAULT 'Never',
+            last_status   TEXT DEFAULT 'idle'
+        );
         """
     )
+    # Populate default smtp settings if empty
+    row = conn.execute("SELECT 1 FROM smtp_settings WHERE id = 1").fetchone()
+    if not row:
+        conn.execute(
+            """
+            INSERT INTO smtp_settings (id, smtp_host, smtp_port, smtp_username, smtp_password, smtp_secure, sender_email, sender_name, subject_template, body_template)
+            VALUES (1, ?, ?, ?, ?, ?, ?, ?, '[Eka Studio] {ReportType} - {Date}', 'Dear Team,
+
+Please find attached the compiled {ReportType} for the date {Date} (Shift: {Shift}).
+
+This is an automated dispatch from Eka Report Studio. Please do not reply directly to this email.
+
+Best Regards,
+Eka Operations Hub')
+            """,
+            (
+                settings.SMTP_HOST,
+                settings.SMTP_PORT,
+                settings.SMTP_MAIL,
+                settings.SMTP_PASS,
+                settings.SMTP_SECURE,
+                settings.SMTP_MAIL,
+                'Eka Operations Hub'
+            )
+        )
+    
+    # Populate default schedules if schedules table is empty
+    row_sched = conn.execute("SELECT 1 FROM schedules LIMIT 1").fetchone()
+    if not row_sched:
+        conn.executescript(
+            """
+            INSERT INTO schedules (id, name, report_type, recipients, frequency, days, time, active, last_run, last_status) VALUES
+            ('sched-1', 'Shift A Daily Production Summary', 'R3', '["omkarregetest@gmail.com"]', 'daily', '[]', '07:30', 1, 'Never', 'idle'),
+            ('sched-2', 'Weekly Management Financial Achievement', 'R2', '["omkarregetest@gmail.com"]', 'weekly', '["Mon"]', '09:00', 1, 'Never', 'idle'),
+            ('sched-3', 'Night Shift Production Run Log', 'R3', '["omkarregetest@gmail.com"]', 'daily', '[]', '22:30', 0, 'Never', 'idle');
+            """
+        )
     conn.commit()
 
 

@@ -1,10 +1,10 @@
 import React, { useState } from "react";
-import { 
-  Calendar, 
-  Download, 
-  FileSpreadsheet, 
-  Loader2, 
-  CheckCircle2, 
+import {
+  Calendar,
+  Download,
+  FileSpreadsheet,
+  Loader2,
+  CheckCircle2,
   AlertCircle,
   HelpCircle,
   TrendingUp,
@@ -12,9 +12,12 @@ import {
   Building2,
   FolderOpen,
   ExternalLink,
-  Layers
+  Layers,
+  Mail,
+  Send
 } from "lucide-react";
 import { apiClient } from "@/app/api/api-client";
+import { Modal, ModalHeader, ModalBody, ModalFooter } from "@/shared/ui/Modal";
 
 export default function Dashboard() {
   // Input fields state initialized with user specified default values
@@ -28,11 +31,15 @@ export default function Dashboard() {
   const [startDate, setStartDate] = useState("2026-04-01");
   const [lastDate, setLastDate] = useState("2027-03-31");
   const [shift, setShift] = useState("A");
-  const [reportType, setReportType] = useState<"R2" | "R3">("R2");
+  const [reportType, setReportType] = useState<"R2" | "R3">("R3");
 
   // Status states
   const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  // Email modal states
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [emailInput, setEmailInput] = useState("");
 
   // File access states
   const [lastGeneratedFile, setLastGeneratedFile] = useState<{ filepath: string; filename: string; type: "R2" | "R3" } | null>(null);
@@ -47,9 +54,14 @@ export default function Dashboard() {
     }
   }, [toast]);
 
-  // Handle report generation and file download
-  const handleDownloadReport = async (e: React.FormEvent) => {
+  const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setEmailInput("");
+    setIsEmailModalOpen(true);
+  };
+
+  // Handle report generation and file download
+  const handleDownloadReport = async (emailToSend?: string) => {
     setIsLoading(true);
     setToast(null);
     setLastGeneratedFile(null);
@@ -59,7 +71,8 @@ export default function Dashboard() {
         ReportDate: reportDate,
         StartDate: startDate,
         LastDate: lastDate,
-        Shift: shift
+        Shift: shift,
+        Email: emailToSend || null
       };
 
       interface GenerateReportResponse {
@@ -68,8 +81,8 @@ export default function Dashboard() {
         filename: string;
       }
 
-      const endpoint = reportType === "R3" 
-        ? "/api/prod-report-type2" 
+      const endpoint = reportType === "R3"
+        ? "/api/prod-report-type2"
         : "/api/mgmt-production-report";
 
       const response = await apiClient<GenerateReportResponse>(endpoint, {
@@ -84,10 +97,13 @@ export default function Dashboard() {
 
       setToast({
         type: "success",
-        message: reportType === "R3" 
-          ? "Production Report R3 generated successfully!" 
-          : "Management report generated successfully!"
+        message: emailToSend
+          ? `Report generated and sent to ${emailToSend} successfully!`
+          : reportType === "R3"
+            ? "Production Report R3 generated successfully!"
+            : "Management report generated successfully!"
       });
+      setIsEmailModalOpen(false);
     } catch (err: any) {
       console.error("Download error:", err);
       setToast({
@@ -158,11 +174,10 @@ export default function Dashboard() {
       {/* Floating Toast Notification */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 animate-bounce shadow-2xl">
-          <div className={`flex items-center gap-3 px-5 py-4 rounded-2xl border backdrop-blur-md transition-all duration-300 ${
-            toast.type === "success" 
-              ? "bg-emerald-50/95 border-emerald-200 text-emerald-800" 
+          <div className={`flex items-center gap-3 px-5 py-4 rounded-2xl border backdrop-blur-md transition-all duration-300 ${toast.type === "success"
+              ? "bg-emerald-50/95 border-emerald-200 text-emerald-800"
               : "bg-rose-50/95 border-rose-200 text-rose-800"
-          }`}>
+            }`}>
             {toast.type === "success" ? (
               <CheckCircle2 className="w-5.5 h-5.5 text-emerald-600 shrink-0" />
             ) : (
@@ -215,10 +230,10 @@ export default function Dashboard() {
 
       {/* Main Form & Parameter Guide Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+
         {/* Date Form Parameters Card */}
         <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-6 md:p-8 flex flex-col justify-between shadow-md relative">
-          <form onSubmit={handleDownloadReport} className="flex flex-col gap-6 w-full">
+          <form onSubmit={handleFormSubmit} className="flex flex-col gap-6 w-full">
             <div>
               <h3 className="text-lg font-bold font-display text-slate-900 mb-1.5 flex items-center gap-2">
                 <FileSpreadsheet className="w-5.5 h-5.5 text-primary" />
@@ -231,32 +246,17 @@ export default function Dashboard() {
 
             {/* Segmented Control / Tabs to select Report Type */}
             <div className="flex bg-slate-100 p-1 rounded-xl w-full max-w-md border border-slate-200">
-              <button
-                type="button"
-                onClick={() => {
-                  setReportType("R2");
-                  setLastGeneratedFile(null);
-                }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                  reportType === "R2"
-                    ? "bg-white text-primary shadow-sm border border-slate-200/50"
-                    : "text-slate-600 hover:text-slate-950 hover:bg-slate-200/50"
-                }`}
-              >
-                <FileSpreadsheet className="w-4.5 h-4.5" />
-                Management Report (R2)
-              </button>
+
               <button
                 type="button"
                 onClick={() => {
                   setReportType("R3");
                   setLastGeneratedFile(null);
                 }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                  reportType === "R3"
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 text-xs font-bold rounded-lg transition-all cursor-pointer ${reportType === "R3"
                     ? "bg-white text-primary shadow-sm border border-slate-200/50"
                     : "text-slate-600 hover:text-slate-950 hover:bg-slate-200/50"
-                }`}
+                  }`}
               >
                 <TrendingUp className="w-4.5 h-4.5" />
                 Production Report (R3)
@@ -264,7 +264,7 @@ export default function Dashboard() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-              
+
               {/* ReportDate Field */}
               <div className="flex flex-col gap-2">
                 <label htmlFor="ReportDate" className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
@@ -376,15 +376,14 @@ export default function Dashboard() {
                   Click generate to compile and save to Downloads directory.
                 </div>
               )}
-              
+
               <button
                 type="submit"
                 disabled={isLoading}
-                className={`relative flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-bold text-white shadow-lg active:scale-98 transition-all w-full md:w-auto ${
-                  isLoading 
-                    ? "bg-primary-hover/75 cursor-not-allowed" 
+                className={`relative flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-bold text-white shadow-lg active:scale-98 transition-all w-full md:w-auto ${isLoading
+                    ? "bg-primary-hover/75 cursor-not-allowed"
                     : "bg-primary hover:bg-primary-hover shadow-primary/20 cursor-pointer"
-                }`}
+                  }`}
               >
                 {isLoading ? (
                   <>
@@ -409,7 +408,7 @@ export default function Dashboard() {
               <HelpCircle className="w-4 h-4 text-slate-500" />
               Parameter Guide
             </h3>
-            
+
             <ul className="flex flex-col gap-4 text-xs text-slate-600">
               <li className="flex gap-2">
                 <span className="h-5 w-5 bg-teal-50 text-primary border border-teal-200/50 rounded flex items-center justify-center font-bold shrink-0">1</span>
@@ -441,6 +440,126 @@ export default function Dashboard() {
         </div>
 
       </div>
+
+      {/* Email Dispatch & Confirmation Modal */}
+      <Modal
+        open={isEmailModalOpen}
+        onClose={() => {
+          if (!isLoading) setIsEmailModalOpen(false);
+        }}
+        size="md"
+      >
+        <ModalHeader
+          title="Confirm Report Generation"
+          description="Your report will compile with the configured parameters."
+          icon={<FileSpreadsheet className="w-6 h-6 text-primary" />}
+        />
+        <ModalBody>
+          <div className="flex flex-col gap-5 py-2">
+            {/* Parameters Summary Card */}
+            <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-4 flex flex-col gap-2.5">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Report Details</span>
+              <div className="grid grid-cols-2 gap-4 text-xs">
+                <div>
+                  <span className="text-slate-500 block">Report Type</span>
+                  <span className="font-semibold text-slate-800">
+                    {reportType === "R3" ? "Production Report (R3)" : "Management Report (R2)"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Target Shift</span>
+                  <span className="font-semibold text-slate-800">Shift {shift}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Report Date</span>
+                  <span className="font-semibold text-slate-800 font-mono">{reportDate}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Fiscal Period</span>
+                  <span className="font-semibold text-slate-800 font-mono">{startDate} to {lastDate}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Email Dispatch Input */}
+            <div className="flex flex-col gap-2">
+              <label htmlFor="modalEmailInput" className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5 text-primary" />
+                Email Address (Optional)
+              </label>
+              <div className="relative flex items-center">
+                <input
+                  id="modalEmailInput"
+                  type="text"
+                  placeholder="e.g. manager@company.com, team@company.com"
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  disabled={isLoading}
+                  className="bg-slate-50 border border-slate-200 rounded-xl pl-4 pr-10 py-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all w-full disabled:opacity-60"
+                />
+                <div className="absolute right-3.5 text-slate-400">
+                  <Mail className="w-4 h-4" />
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-400 leading-normal">
+                Leave empty to skip emailing and download the report directly to your local machine. You can enter multiple recipients separated by commas.
+              </p>
+            </div>
+          </div>
+        </ModalBody>
+        <ModalFooter align="right" className="pt-2">
+          <button
+            type="button"
+            disabled={isLoading}
+            onClick={() => setIsEmailModalOpen(false)}
+            className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          
+          <div className="flex items-center gap-2">
+            {!emailInput.trim() ? (
+              <button
+                type="button"
+                disabled={isLoading}
+                onClick={() => handleDownloadReport()}
+                className="flex items-center gap-1.5 px-5 py-2.5 bg-primary hover:bg-primary-hover text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md shadow-primary/20 disabled:opacity-50"
+              >
+                {isLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Download className="w-3.5 h-3.5" />
+                )}
+                Generate &amp; Download
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => handleDownloadReport()}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+                >
+                  Download Only
+                </button>
+                <button
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => handleDownloadReport(emailInput)}
+                  className="flex items-center gap-1.5 px-5 py-2.5 bg-primary hover:bg-primary-hover text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md shadow-primary/20 disabled:opacity-50"
+                >
+                  {isLoading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Send className="w-3.5 h-3.5" />
+                  )}
+                  Send &amp; Download
+                </button>
+              </>
+            )}
+          </div>
+        </ModalFooter>
+      </Modal>
     </div>
   );
 }
