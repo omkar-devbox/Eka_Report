@@ -68,15 +68,11 @@ if (-not (Test-Path $BackendVenv)) {
     Write-Host "⚠️ Python virtual environment ('venv') is missing! Creating it now..." -ForegroundColor Yellow
     Set-Location $BackendDir
     python -m venv venv
-    Write-Host "Installing backend requirements..." -ForegroundColor Gray
-    & $PythonExe -m pip install -r (Join-Path $BackendDir "requirements.txt")
-    & $PythonExe -m pip install openpyxl pyinstaller
-} elseif (-not (Test-Path $PyInstallerExe)) {
-    Write-Host "⚠️ PyInstaller is missing from the virtual environment! Installing now..." -ForegroundColor Yellow
-    & $PythonExe -m pip install pyinstaller openpyxl
-} else {
-    Write-Host "✅ Backend virtual environment and PyInstaller present." -ForegroundColor Gray
 }
+
+Write-Host "Ensuring backend dependencies are fully installed..." -ForegroundColor Gray
+& $PythonExe -m pip install -r (Join-Path $BackendDir "requirements.txt")
+& $PythonExe -m pip install openpyxl pyinstaller
 
 # ==========================================
 # 🛠️ BUILD PROCESS
@@ -114,6 +110,8 @@ $IconPath = Join-Path $BackendDir "eka_logo.ico"
     --add-data ".env;." `
     --add-data "ProductionReport_R3.xlsx;." `
     --add-data "MProductionReport.xlsx;." `
+    --add-data "Chasis_Loss_Report.xlsx;." `
+    --add-data "Trim_loss_Report.xlsx;." `
     --hidden-import "uvicorn.protocols.http.h11_impl" `
     --hidden-import "uvicorn.protocols.http.httptools_impl" `
     --hidden-import "uvicorn.protocols.websockets.websockets_impl" `
