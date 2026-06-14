@@ -1,9 +1,9 @@
 {
   "info": {
     "name": "Mgmt Production Report Collection",
-    "description": "Postman collection for the /mgmt-production-report endpoint",
+    "description": "Postman collection for all production report endpoints",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   "item": [
     {
@@ -20,11 +20,57 @@
         "url": {
           "raw": "{{baseUrl}}/api/mgmt-production-report",
           "host": ["{{baseUrl}}"],
-          "path": ["api","mgmt-production-report"]
+          "path": ["api", "mgmt-production-report"]
         },
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"ReportDate\": \"2026-06-07\",\n    \"StartDate\": \"2026-04-01\",\n    \"LastDate\": \"2027-05-31\"\n}"
+          "raw": "{\n    \"ReportDate\": \"2026-06-07\",\n    \"StartDate\": \"2026-04-01\",\n    \"LastDate\": \"2027-05-31\",\n    \"Shift\": \"All\"\n}"
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Generate Production Report Type-2 (R3)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/prod-report-type2",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "prod-report-type2"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"ReportDate\": \"2026-06-09\",\n    \"StartDate\": \"2026-04-01\",\n    \"LastDate\": \"2027-03-31\",\n    \"Shift\": \"All\"\n}"
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Open Production Report Type-2 File",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/prod-report-type2/open-file",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "prod-report-type2", "open-file"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"filepath\": \"C:\\\\Users\\\\ANIKET\\\\Downloads\\\\ProductionReport_R3_2026-06-09_10-00-00.xlsx\"\n}"
         }
       },
       "response": []

@@ -2,6 +2,7 @@ import { type ReactNode, useEffect } from "react";
 import { BrowserRouter } from "react-router-dom";
 import { LazyMotion, domAnimation } from "framer-motion";
 import { ToastContainer } from "@/shared/ui/toast";
+<<<<<<< Updated upstream
 import { ThemeProvider } from "@/shared/lib/theme/ThemeContext";
 import { useAuthStore } from "@/shared/lib/store/authStore";
 import { bindAuthStore } from "../api/api-client";
@@ -49,10 +50,14 @@ function SilentRefreshOnMount() {
 
   return null;
 }
+=======
+// import { ThemeProvider } from "@/shared/lib/theme/ThemeContext";
+>>>>>>> Stashed changes
 
 export const Providers = ({ children }: { children: ReactNode }) => {
   return (
     <BrowserRouter>
+<<<<<<< Updated upstream
       <ThemeProvider>
         <LazyMotion features={domAnimation}>
           <SilentRefreshOnMount />
@@ -60,6 +65,14 @@ export const Providers = ({ children }: { children: ReactNode }) => {
           <ToastContainer />
         </LazyMotion>
       </ThemeProvider>
+=======
+      {/* <ThemeProvider> */}
+      <LazyMotion features={domAnimation}>
+        {children}
+        <ToastContainer />
+      </LazyMotion>
+      {/* </ThemeProvider> */}
+>>>>>>> Stashed changes
     </BrowserRouter>
   );
 };

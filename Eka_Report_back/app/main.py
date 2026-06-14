@@ -11,6 +11,10 @@ from app.api.endpoints import auth
 from app.api.endpoints import users
 from app.api.MgmtProdReport import mgmt_prod_report
 from app.api.ProdReportType2 import prod_report_type2
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
 
 # Explicitly register JavaScript and CSS MIME types to prevent Windows Registry overrides
 mimetypes.add_type("application/javascript", ".js", True)
